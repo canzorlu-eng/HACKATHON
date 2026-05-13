@@ -6,7 +6,7 @@ Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-s
 **Meaning:** “How It Will ACTUALLY Look On You”  
 **Project Type:** AI-powered fashion fit & purchase risk analysis platform  
 **Primary Language:** Turkish (ALL user-facing inputs/outputs MUST be Turkish)  
-**Reference Document:** The implementation MUST follow the SRS document(@HIWALOY_FULL_SRS.pdf) as the source of truth.
+**Reference Document:** The implementation MUST follow the SRS(@HIWALOY_FULL_SRS.pdf) document as the source of truth. First of all you should examine it to get our aim
 
 ---
 
@@ -104,7 +104,9 @@ Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, sim
 
 DO NOT:
 - build full virtual try-on systems
-- build 3D avatar systems
+- build realistic cloth simulation systems
+- build advanced body mesh reconstruction systems
+- build production-grade avatar pipelines
 - build full social features
 - build marketplace systems
 - build live scraping infrastructure
@@ -125,12 +127,26 @@ Avoid:
 - unnecessary microservices
 - overengineered abstractions
 - premature optimization
+- complex rendering pipelines
+- GPU-heavy browser logic
 
 Prefer:
 - clean pipelines
 - deterministic flows
 - understandable prompts
 - explainable outputs
+- lightweight visualization systems
+
+IMPORTANT:
+The visual layer exists to SUPPORT the AI reasoning system.
+
+The product's value comes from:
+- reasoning
+- explainability
+- purchase confidence
+- risk prediction
+
+NOT from flashy visuals.
 
 ---
 
@@ -165,6 +181,11 @@ When modifying AI pipelines:
   - user trust
 
 Never rewrite entire agent flows unnecessarily.
+
+When modifying frontend visuals:
+- maintain minimal design consistency
+- avoid adding unnecessary animation systems
+- prioritize clarity over visual complexity
 
 ---
 
@@ -203,16 +224,30 @@ Success IS:
 - user-trustworthy
 - grounded in provided data
 
+Frontend success criteria:
+- clean interaction flow
+- understandable AI reasoning
+- responsive animations
+- smooth upload experience
+- premium but lightweight UX
+
 ---
 
 # PROJECT ARCHITECTURE
 
 ## High-Level Architecture
 
+Architecture Style:
+- AI-first modular architecture
+- lightweight service-oriented backend
+- NOT traditional MVC-heavy architecture
+
 Frontend:
-- Next.js
+- Next.js App Router
 - TailwindCSS
 - shadcn/ui
+- Framer Motion
+- Three.js (minimal usage only)
 
 Backend:
 - FastAPI (Python)
@@ -229,6 +264,74 @@ Databases:
 Deployment:
 - Vercel (frontend)
 - Railway / Render (backend)
+
+Infrastructure:
+- Docker
+- Docker Compose
+
+---
+
+# FRONTEND ARCHITECTURE RULES
+
+Frontend priorities:
+1. clean UX
+2. AI explainability
+3. upload simplicity
+4. premium feel
+5. responsiveness
+
+The frontend should feel:
+- modern
+- minimal
+- intelligent
+- smooth
+- trustworthy
+
+DO NOT:
+- create gaming-style interfaces
+- create cyberpunk dashboards
+- overload the screen
+- use excessive glassmorphism
+- create distracting animations
+
+---
+
+# THREE.JS & BLENDER RULES
+
+Three.js MAY be used ONLY for:
+- lightweight mannequin visualization
+- subtle interactive body silhouettes
+- floating UI objects
+- premium landing animations
+- fit-zone highlighting
+- lightweight transitions
+
+Three.js MUST NOT be used for:
+- realistic cloth simulation
+- advanced physics systems
+- full body reconstruction
+- metaverse-like environments
+- heavy GPU rendering
+- production virtual try-on systems
+
+Blender assets MAY be used for:
+- static mannequin assets
+- lightweight body meshes
+- optimized visual components
+
+DO NOT:
+- create complex rigging pipelines
+- create animation-heavy workflows
+- build full avatar systems
+
+IMPORTANT:
+3D is ONLY a visual enhancement layer.
+
+The core value remains:
+- fit prediction
+- reasoning
+- purchase confidence
+- return-risk reduction
 
 ---
 
@@ -270,6 +373,12 @@ GOOD:
 BAD:
 > "You are overweight."
 
+The agent should:
+- remain neutral
+- remain respectful
+- focus on fit behavior
+- avoid attractiveness judgments
+
 ---
 
 ## 3. Garment Analyzer Agent
@@ -285,6 +394,11 @@ Responsibilities:
 The agent should reason visually.
 
 DO NOT hardcode all logic.
+
+The garment analyzer should prioritize:
+- explainability
+- visible garment characteristics
+- realistic uncertainty handling
 
 ---
 
@@ -310,6 +424,12 @@ RAG goals:
   - fit mismatch patterns
   - quality concerns
 
+The RAG pipeline should prioritize:
+- relevance
+- concise outputs
+- low hallucination rate
+- grounded retrieval
+
 ---
 
 ## 5. Fit Recommendation Agent
@@ -333,6 +453,11 @@ Every recommendation MUST explain:
 Example:
 > "M beden öneriliyor çünkü marka büyük kalıplı ve omuz genişliğiniz için L fazla bol durabilir."
 
+The recommendation system should NEVER:
+- sound overly certain
+- invent unsupported fit claims
+- make subjective beauty judgments
+
 ---
 
 ## 6. Purchase Risk Agent
@@ -351,6 +476,11 @@ Output should ALWAYS include:
 - risk level
 - explanation
 - confidence
+
+The risk engine should focus on:
+- practical purchase risks
+- fit mismatch likelihood
+- realistic user expectations
 
 ---
 
@@ -376,6 +506,12 @@ Parallel execution is encouraged where logical.
 Example:
 - body analysis and garment analysis may run concurrently.
 
+The graph should prioritize:
+- deterministic execution
+- explainability
+- modularity
+- debugging simplicity
+
 ---
 
 # GEMINI API REQUIREMENTS
@@ -396,6 +532,12 @@ Preferred outputs:
 - schema-constrained responses
 - deterministic formatting
 
+The model should:
+- express uncertainty
+- avoid overconfidence
+- avoid unsupported assumptions
+- remain grounded in image evidence
+
 ---
 
 # LANGUAGE REQUIREMENTS
@@ -412,6 +554,17 @@ Examples:
 - AI responses → Turkish REQUIRED
 
 DO NOT mix languages in user-facing outputs.
+
+The UI tone should feel:
+- modern
+- natural
+- premium
+- concise
+
+Avoid:
+- robotic translations
+- excessive technical jargon
+- unnatural Turkish phrasing
 
 ---
 
@@ -435,6 +588,17 @@ Main UI sections:
 - Risk Analysis
 - Community Insights
 - Confidence Score
+
+Preferred UX behavior:
+- smooth transitions
+- progressive analysis feedback
+- responsive uploads
+- clear recommendation hierarchy
+
+Recommended libraries:
+- Framer Motion
+- shadcn/ui
+- TailwindCSS
 
 ---
 
@@ -497,6 +661,12 @@ The AI is a:
 NOT:
 - a beauty judge
 
+The prompts should encourage:
+- grounded reasoning
+- explainability
+- confidence scoring
+- realistic outputs
+
 ---
 
 # DATASET RULES
@@ -516,6 +686,8 @@ Preferred MVP scale:
 
 Enough for hackathon demonstrations.
 
+Dataset quality matters more than dataset size.
+
 ---
 
 # TESTING REQUIREMENTS
@@ -532,6 +704,12 @@ Verify:
 - deterministic formatting
 - confidence score presence
 - explanation presence
+
+Frontend testing should include:
+- upload flow
+- responsive layouts
+- animation smoothness
+- mobile rendering
 
 ---
 
@@ -550,6 +728,49 @@ Hackathon optimization priorities:
 NOT:
 - hyperscale optimization
 
+Three.js rendering should remain lightweight.
+
+Avoid:
+- unnecessary GPU load
+- large 3D assets
+- excessive shaders
+
+---
+
+# DOCKER & CONTAINERIZATION REQUIREMENTS
+
+The project MUST support containerized deployment.
+
+Docker should be used for:
+- backend packaging
+- frontend packaging
+- environment consistency
+- simplified deployment
+- local development setup
+
+Docker Compose should orchestrate:
+- frontend service
+- backend service
+- PostgreSQL
+- ChromaDB
+
+Requirements:
+- containers should remain lightweight
+- multi-stage builds are preferred
+- environment variables must be externalized
+- secrets must NOT be hardcoded into images
+
+The Docker setup should prioritize:
+1. fast local setup
+2. reproducible environments
+3. hackathon demo stability
+4. simple deployment workflow
+
+DO NOT:
+- overengineer Kubernetes infrastructure
+- introduce unnecessary orchestration complexity
+- optimize for hyperscale production traffic
+
 ---
 
 # SECURITY & PRIVACY
@@ -565,13 +786,19 @@ Requirements:
 DO NOT:
 - use images outside analysis scope
 
+The MVP should minimize:
+- stored biometric-like data
+- unnecessary image persistence
+- sensitive logging
+
 ---
 
 # MVP BOUNDARY (VERY IMPORTANT)
 
 The MVP DOES NOT include:
 - full virtual try-on
-- 3D rendering
+- realistic cloth simulation
+- advanced 3D avatar systems
 - social media features
 - influencer integrations
 - payment systems
@@ -600,3 +827,49 @@ Every feature should reinforce:
 - trust
 - explainability
 - purchase confidence
+
+
+## Model Usage Policy
+
+- Use Claude Opus ONLY for:
+  - system design
+  - architecture planning
+  - SRS interpretation
+  - complex reasoning
+
+- Use Claude Sonnet for:
+  - all code generation
+  - implementation
+  - refactoring
+  - debugging
+  - testing
+
+- Never use Opus for routine coding tasks
+- Prefer minimal-cost model unless reasoning complexity requires escalation
+
+
+# RUFLO / SWARM USAGE POLICY
+
+RuFlo MUST be used for multi-agent coordination when tasks involve:
+- architecture review
+- code review
+- cross-module implementation
+
+For implementation tasks:
+- Use Claude Sonnet as the main coding model.
+- Use RuFlo swarm to delegate supporting review work:
+  - chef agent: orchestrate all agents
+  - developer agent: implement logic, code
+  - reviewer agent: code quality and requirement compliance
+  - researcher/planner agent: edge-case analysis when needed
+
+Do NOT use RuFlo swarm for trivial one-file edits or simple copy/text changes.
+
+Before completing a major feature, Claude must run or simulate a RuFlo-backed review pass covering:
+1. SRS compliance
+2. Turkish user-facing output correctness
+
+
+# Remainder
+
+Your code will be reviewed by CODEX

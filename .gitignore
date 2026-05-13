@@ -1,6 +1,39 @@
-# gitignore template for LangChain products, e.g., LangGraph, LangSmith
-# website: https://www.langchain.com/
-# website: https://www.langchain.com/langgraph
-
-# LangGraph
+# LangChain / LangGraph
 .langgraph_api/
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.local.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.vercel/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local data / uploads
+backend/data/uploaded_images/
+backend/app/data/.cache/
+
+# Claude / swarm artifacts already in repo
+.claude-flow/
+.swarm/
+ruvector.db
