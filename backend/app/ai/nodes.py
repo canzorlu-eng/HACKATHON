@@ -111,7 +111,7 @@ def make_analyzer_node(ai_client):
 
 
 # ---------------------------------------------------------------------------
-# Node 3: Review retriever (ChromaDB with placeholder fallback)
+# Node 3: Review retriever (UC-06 ReviewIntelligenceService with fallback)
 # ---------------------------------------------------------------------------
 
 _FALLBACK_INSIGHTS = [
@@ -120,70 +120,57 @@ _FALLBACK_INSIGHTS = [
 ]
 
 
-def _query_chroma(category: str, fit_type: str, brand: str) -> list[dict]:
-    """
-    Query ChromaDB reviews_v1 collection.
-    Returns empty list on any error (connection refused, collection missing, etc.).
-    """
-    try:
-        import chromadb
-        from app.config import get_settings
-
-        s = get_settings()
-        client = chromadb.HttpClient(host=s.chroma_host, port=int(s.chroma_port))
-        col = client.get_collection("reviews_v1")
-
-        query_text = f"{category} {fit_type} {brand} beden uyum kalıp"
-        results = col.query(query_texts=[query_text], n_results=5)
-
-        metadatas = (results.get("metadatas") or [[]])[0]
-        theme_counts: dict[str, dict] = {}
-        for meta in metadatas:
-            raw_themes = meta.get("themes", "")
-            sentiment  = meta.get("sentiment", "neutral")
-            for theme in raw_themes.split(","):
-                theme = theme.strip()
-                if not theme:
-                    continue
-                if theme not in theme_counts:
-                    theme_counts[theme] = {"count": 0, "sentiment": sentiment}
-                theme_counts[theme]["count"] += 1
-
-        return [
-            {"theme": t, "count": v["count"], "sentiment": v["sentiment"]}
-            for t, v in theme_counts.items()
-        ]
-    except Exception as exc:
-        logger.debug("review_retriever chroma_unavailable: %s", type(exc).__name__)
-        return []
-
-
 def review_retriever_node(state: PipelineState) -> dict:
     """
-    Query ChromaDB for relevant review insights.
-    Falls back to curated placeholder when ChromaDB is unavailable or empty.
+    Query ChromaDB via ReviewIntelligenceService for grounded review insights.
+
+    Falls back to curated placeholder insights when the service is unavailable
+    or returns no relevant results.  The retrieval status is stored in
+    ``review_retrieval_status`` so downstream nodes and tests can inspect it.
     """
+    from app.services.review_service import get_review_service
+
     garment  = state.get("garment_analysis") or {}
     category = garment.get("category", "")
     fit_type = garment.get("fit_type", "regular")
     brand    = garment.get("brand_sizing_tendency", "standart")
 
-    insights = _query_chroma(category, fit_type, brand)
-    source   = "chroma"
+    service = get_review_service()
 
-    if not insights:
-        insights = list(_FALLBACK_INSIGHTS)
-        source   = "fallback"
-        if brand == "küçük kalıplı":
-            insights.insert(0, {"theme": "bir beden büyük alınmasını öneriyor", "count": 15, "sentiment": "warning"})
-        elif brand == "büyük kalıplı":
-            insights.insert(0, {"theme": "bir beden küçük alınmasını öneriyor", "count": 10, "sentiment": "warning"})
+    if service is not None:
+        try:
+            result = service.query(category, fit_type, brand)
+            if result.status == "ok":
+                logger.info(
+                    "review_retriever source=chroma insights=%d category=%s",
+                    len(result.insights), category,
+                )
+                return {
+                    "review_insights": result.as_pipeline_dicts,
+                    "review_retrieval_status": result.status,
+                }
+            # Empty or low-relevance — fall through to fallback
+            logger.info(
+                "review_retriever status=%s — using fallback insights", result.status,
+            )
+        except Exception as exc:
+            logger.debug("review_retriever service_error: %s", type(exc).__name__)
+
+    # ── Fallback: curated placeholder insights ────────────────────────────
+    insights = list(_FALLBACK_INSIGHTS)
+    if brand == "küçük kalıplı":
+        insights.insert(0, {"theme": "bir beden büyük alınmasını öneriyor", "count": 15, "sentiment": "warning"})
+    elif brand == "büyük kalıplı":
+        insights.insert(0, {"theme": "bir beden küçük alınmasını öneriyor", "count": 10, "sentiment": "warning"})
 
     logger.info(
-        "review_retriever source=%s insights=%d category=%s",
-        source, len(insights), category,
+        "review_retriever source=fallback insights=%d category=%s",
+        len(insights), category,
     )
-    return {"review_insights": insights}
+    return {
+        "review_insights": insights,
+        "review_retrieval_status": "fallback",
+    }
 
 
 # ---------------------------------------------------------------------------

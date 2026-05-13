@@ -23,6 +23,7 @@ class PipelineState(TypedDict, total=False):
     garment_analysis: Optional[dict] # keys: category, fit_type, fabric_cues, confidence, …
 
     review_insights: list           # list of dicts: theme, count, sentiment
+    review_retrieval_status: str    # "ok" | "empty" | "low_relevance" | "fallback" | "error"
 
     recommendation: Optional[dict]  # recommended_size, confidence, explanation_tr, uncertainty_tr
     risk_evaluation: Optional[dict] # risk_level, risk_factors, risk_score, confidence

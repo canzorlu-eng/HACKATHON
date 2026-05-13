@@ -12,6 +12,9 @@
     --accent-foreground: 240 6% 10%;
     --border: 240 6% 90%;
     --radius: 0.75rem;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --ring: 240 5.9% 10%;
   }
 
   .dark {
@@ -22,6 +25,13 @@
     --accent: 240 4% 16%;
     --accent-foreground: 0 0% 98%;
     --border: 240 4% 16%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --ring: 240 4.9% 83.9%;
+  }
+
+  * {
+    @apply border-border;
   }
 
   html, body {
