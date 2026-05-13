@@ -23,14 +23,15 @@ type Phase =
   | "error";
 
 interface AnalysisResult {
-  recommended_size: string;
-  confidence_score: number;   // float 0-1 from backend
-  confidence_pct: string;     // "%81" formatted string from backend
-  explanation_tr: string;
-  risk_level: "low" | "medium" | "high"; // English enum for logic
-  risk_level_tr: string;                  // Turkish label for display
-  risk_factors_tr: string[];
-  community_insights_tr: string[];
+  recommended_size: string | null;
+  confidence_score: number | null;   // float 0-1 from backend
+  confidence_pct: string | null;     // "%81" formatted string from backend
+  explanation_tr: string | null;
+  uncertainty_tr: string | null;
+  risk_level: "low" | "medium" | "high" | null;
+  risk_level_tr: string | null;
+  risk_factors_tr: string[] | null;
+  community_insights_tr: string[] | null;
 }
 
 // Map phase to a numeric step for the progress component (0 = uploading, 1-6)
@@ -206,33 +207,8 @@ export default function AnalyzePage() {
       resultRef.current = data;
       setResult(data);
 
-      // If we've already reached step_6, go straight to done
-      setPhase((prev) => {
-        if (
-          prev === "step_6" ||
-          prev === "done" ||
-          prev === "uploading" ||
-          prev === "step_1" ||
-          prev === "step_2" ||
-          prev === "step_3" ||
-          prev === "step_4" ||
-          prev === "step_5"
-        ) {
-          // Only flip to done if at or past step_6
-          const order: Phase[] = [
-            "uploading",
-            "step_1",
-            "step_2",
-            "step_3",
-            "step_4",
-            "step_5",
-            "step_6",
-          ];
-          const idx = order.indexOf(prev);
-          return idx >= order.indexOf("step_6") ? "done" : prev;
-        }
-        return prev;
-      });
+      // If step_6 has already fired, flip to done now; otherwise the 8.7s timer handles it
+      setPhase((prev) => (prev === "step_6" ? "done" : prev));
     } catch (err) {
       console.error(err);
       setPhase("error");
@@ -377,7 +353,21 @@ export default function AnalyzePage() {
 
   function renderResults() {
     if (!result) return null;
-    const { recommended_size, confidence_score, confidence_pct, explanation_tr, risk_level, risk_level_tr, risk_factors_tr, community_insights_tr } = result;
+    const {
+      recommended_size,
+      confidence_score,
+      confidence_pct,
+      explanation_tr,
+      uncertainty_tr,
+      risk_level,
+      risk_level_tr,
+      risk_factors_tr,
+      community_insights_tr,
+    } = result;
+
+    const safeRiskFactors = risk_factors_tr ?? [];
+    const safeInsights = community_insights_tr ?? [];
+    const safeConfidence = confidence_score ?? 0;
 
     return (
       <motion.div
@@ -395,16 +385,23 @@ export default function AnalyzePage() {
           </p>
           <div className="flex flex-col items-center gap-1 py-2">
             <span className="text-4xl font-bold text-foreground">
-              {recommended_size}
+              {recommended_size ?? "—"}
             </span>
             <span className="text-sm text-muted-foreground">
-              Güven: {confidence_pct}
+              Güven: {confidence_pct ?? "—"}
             </span>
           </div>
-          <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
-            <span className="mr-1 font-medium text-foreground">Açıklama:</span>
-            {explanation_tr}
-          </p>
+          {explanation_tr && (
+            <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
+              <span className="mr-1 font-medium text-foreground">Açıklama:</span>
+              {explanation_tr}
+            </p>
+          )}
+          {uncertainty_tr && (
+            <p className="mt-2 text-xs text-muted-foreground/70 leading-relaxed italic">
+              {uncertainty_tr}
+            </p>
+          )}
         </div>
 
         {/* Confidence bar */}
@@ -415,14 +412,14 @@ export default function AnalyzePage() {
           <div className="flex items-center gap-3">
             <div className="relative h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
               <motion.div
-                className={`h-full rounded-full ${confidenceColor(confidence_score)}`}
+                className={`h-full rounded-full ${confidenceColor(safeConfidence)}`}
                 initial={{ width: 0 }}
-                animate={{ width: `${Math.round(confidence_score * 100)}%` }}
+                animate={{ width: `${Math.round(safeConfidence * 100)}%` }}
                 transition={{ duration: 0.7, ease: "easeOut" }}
               />
             </div>
             <span className="w-10 text-right text-sm font-medium text-foreground">
-              {confidence_pct}
+              {confidence_pct ?? "—"}
             </span>
           </div>
         </div>
@@ -433,13 +430,13 @@ export default function AnalyzePage() {
             Risk Değerlendirmesi
           </p>
           <span
-            className={`inline-block rounded-full px-3 py-0.5 text-xs font-semibold ${riskBadgeClass(risk_level)}`}
+            className={`inline-block rounded-full px-3 py-0.5 text-xs font-semibold ${riskBadgeClass(risk_level ?? "")}`}
           >
-            {risk_level_tr}
+            {risk_level_tr ?? "—"}
           </span>
-          {risk_factors_tr.length > 0 && (
+          {safeRiskFactors.length > 0 && (
             <ul className="mt-4 flex flex-col gap-2">
-              {risk_factors_tr.map((factor, i) => (
+              {safeRiskFactors.map((factor, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
                   <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
                   {factor}
@@ -454,13 +451,13 @@ export default function AnalyzePage() {
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Topluluk Yorumları
           </p>
-          {community_insights_tr.length === 0 ? (
+          {safeInsights.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Henüz yeterli kullanıcı yorumu bulunmuyor.
             </p>
           ) : (
             <ul className="flex flex-col gap-3">
-              {community_insights_tr.map((insight, i) => (
+              {safeInsights.map((insight, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
                   <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />
                   {insight}

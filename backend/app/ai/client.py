@@ -14,6 +14,13 @@ from typing import Optional, Protocol, runtime_checkable
 logger = logging.getLogger(__name__)
 
 
+def _detect_mime(image_bytes: bytes) -> str:
+    """Return the correct MIME type from magic bytes. Defaults to image/jpeg."""
+    if image_bytes[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    return "image/jpeg"
+
+
 @runtime_checkable
 class AIClient(Protocol):
     async def analyze_body(
@@ -119,10 +126,14 @@ class RealGeminiClient:
     def _parse(self, text: str) -> dict:
         text = text.strip()
         if text.startswith("```"):
-            text = text.split("```")[1]
+            # Strip opening fence (```json or ```)
+            text = text[3:]
             if text.startswith("json"):
                 text = text[4:]
-        return json.loads(text)
+            # Strip closing fence if present
+            if text.endswith("```"):
+                text = text[:-3]
+        return json.loads(text.strip())
 
     async def analyze_body(
         self,
@@ -147,7 +158,7 @@ class RealGeminiClient:
         )
         parts: list = []
         if image_bytes:
-            parts.append({"mime_type": "image/jpeg", "data": image_bytes})
+            parts.append({"mime_type": _detect_mime(image_bytes), "data": image_bytes})
         parts.append(prompt)
         response = model.generate_content(
             parts,
@@ -166,7 +177,7 @@ class RealGeminiClient:
         model = self._make_model()
         parts: list = []
         if image_bytes:
-            parts.append({"mime_type": "image/jpeg", "data": image_bytes})
+            parts.append({"mime_type": _detect_mime(image_bytes), "data": image_bytes})
         parts.append(_GARMENT_PROMPT)
         response = model.generate_content(
             parts,

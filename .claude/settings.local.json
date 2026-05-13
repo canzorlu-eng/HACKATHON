@@ -28,7 +28,10 @@
       "Bash(python -m pytest tests/test_review_intelligence.py -v)",
       "Bash(\"C:\\\\Users\\\\zorlu\\\\OneDrive\\\\Desktop\\\\HACKATHON\\\\backend\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest tests/test_review_intelligence.py -v)",
       "Bash(\"C:\\\\Users\\\\zorlu\\\\OneDrive\\\\Desktop\\\\HACKATHON\\\\backend\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest -v)",
-      "Bash(node_modules\\\\.bin\\\\next build *)"
+      "Bash(node_modules\\\\.bin\\\\next build *)",
+      "Bash(.venv/Scripts/python -m pytest tests/test_ai_client.py tests/test_review_intelligence.py -v --tb=short)",
+      "Bash(.venv/Scripts/python -m pytest tests/ -v --tb=short --ignore=tests/__init__.py)",
+      "Bash(.venv/Scripts/python -m pytest tests/test_ai_client.py tests/test_review_intelligence.py tests/test_pipeline.py tests/test_integration.py -v --tb=short)"
     ]
   },
   "enableAllProjectMcpServers": true,

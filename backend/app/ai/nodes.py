@@ -115,8 +115,8 @@ def make_analyzer_node(ai_client):
 # ---------------------------------------------------------------------------
 
 _FALLBACK_INSIGHTS = [
-    {"theme": "beden tablosunu kontrol edin", "count": 12, "sentiment": "neutral"},
-    {"theme": "kumaş kalitesi iyi", "count": 8, "sentiment": "positive"},
+    {"theme": "beden tablosunu kontrol edin", "sentiment": "neutral", "is_fallback": True},
+    {"theme": "kumaş kalitesi iyi", "sentiment": "positive", "is_fallback": True},
 ]
 
 
@@ -159,9 +159,9 @@ def review_retriever_node(state: PipelineState) -> dict:
     # ── Fallback: curated placeholder insights ────────────────────────────
     insights = list(_FALLBACK_INSIGHTS)
     if brand == "küçük kalıplı":
-        insights.insert(0, {"theme": "bir beden büyük alınmasını öneriyor", "count": 15, "sentiment": "warning"})
+        insights.insert(0, {"theme": "bir beden büyük alınmasını öneriyor", "sentiment": "warning", "is_fallback": True})
     elif brand == "büyük kalıplı":
-        insights.insert(0, {"theme": "bir beden küçük alınmasını öneriyor", "count": 10, "sentiment": "warning"})
+        insights.insert(0, {"theme": "bir beden küçük alınmasını öneriyor", "sentiment": "warning", "is_fallback": True})
 
     logger.info(
         "review_retriever source=fallback insights=%d category=%s",
@@ -311,7 +311,15 @@ def turkish_formatter_node(state: PipelineState) -> dict:
     community_tr: list[str] = []
     for ins in insights[:3]:
         theme = ins.get("theme", "")
-        if theme:
+        if not theme:
+            continue
+        if ins.get("is_fallback"):
+            sentiment = ins.get("sentiment", "neutral")
+            if sentiment == "warning":
+                community_tr.append(f"Genel öneri: {theme}.")
+            else:
+                community_tr.append(f"Genel bilgi: {theme}.")
+        else:
             sentiment = ins.get("sentiment", "neutral")
             if sentiment == "positive":
                 community_tr.append(f"Kullanıcılar olumlu değerlendiriyor: {theme}.")

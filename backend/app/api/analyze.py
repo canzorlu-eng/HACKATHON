@@ -114,6 +114,7 @@ async def start_analysis(
             )
     except Exception:
         logger.exception("pipeline_failed analysis_id=%s", analysis.id)
+        session.rollback()
         # Return partial response (image stored, AI result absent) rather than 500
 
     message = (

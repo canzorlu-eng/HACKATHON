@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { motion } from "framer-motion";
 
 export interface HistoryItem {
@@ -45,22 +46,13 @@ export function HistoryCard({ item, index }: HistoryCardProps) {
 
   const risk = item.risk_level ? riskConfig[item.risk_level] : null;
 
-  function handleClick() {
-    console.log("Navigate to /history/" + item.analysis_id);
-  }
-
   return (
+    <Link href={`/history/${item.analysis_id}`} className="block rounded-xl focus:outline-none focus:ring-2 focus:ring-foreground/20">
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, delay: index * 0.06, ease: "easeOut" }}
-      onClick={handleClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") handleClick();
-      }}
-      className="rounded-xl border border-border bg-background p-4 shadow-sm flex items-center gap-4 cursor-pointer hover:shadow-md transition-shadow focus:outline-none focus:ring-2 focus:ring-foreground/20"
+      className="rounded-xl border border-border bg-background p-4 shadow-sm flex items-center gap-4 cursor-pointer hover:shadow-md transition-shadow"
     >
       {/* Size circle */}
       <div className="w-12 h-12 rounded-full bg-foreground text-background flex items-center justify-center shrink-0 text-lg font-bold select-none">
@@ -83,5 +75,6 @@ export function HistoryCard({ item, index }: HistoryCardProps) {
         )}
       </div>
     </motion.div>
+    </Link>
   );
 }
