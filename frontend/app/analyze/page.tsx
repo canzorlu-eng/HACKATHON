@@ -24,9 +24,11 @@ type Phase =
 
 interface AnalysisResult {
   recommended_size: string;
-  confidence_pct: number;
+  confidence_score: number;   // float 0-1 from backend
+  confidence_pct: string;     // "%81" formatted string from backend
   explanation_tr: string;
-  risk_level_tr: string;
+  risk_level: "low" | "medium" | "high"; // English enum for logic
+  risk_level_tr: string;                  // Turkish label for display
   risk_factors_tr: string[];
   community_insights_tr: string[];
 }
@@ -55,28 +57,25 @@ const BASE =
 // Confidence bar color
 // ---------------------------------------------------------------------------
 
-function confidenceColor(pct: number): string {
+function confidenceColor(score: number): string {
+  const pct = score * 100;
   if (pct > 70) return "bg-green-500";
   if (pct >= 50) return "bg-amber-400";
   return "bg-red-500";
 }
 
 // ---------------------------------------------------------------------------
-// Risk badge
+// Risk badge — uses English risk_level enum, not the Turkish display string
 // ---------------------------------------------------------------------------
 
 const RISK_BADGE_MAP: Record<string, string> = {
-  düşük: "bg-green-100 text-green-700",
-  low: "bg-green-100 text-green-700",
-  orta: "bg-amber-100 text-amber-700",
+  low:    "bg-green-100 text-green-700",
   medium: "bg-amber-100 text-amber-700",
-  yüksek: "bg-red-100 text-red-700",
-  high: "bg-red-100 text-red-700",
+  high:   "bg-red-100 text-red-700",
 };
 
 function riskBadgeClass(level: string): string {
-  const key = level.toLowerCase();
-  return RISK_BADGE_MAP[key] ?? "bg-muted text-muted-foreground";
+  return RISK_BADGE_MAP[level] ?? "bg-muted text-muted-foreground";
 }
 
 // ---------------------------------------------------------------------------
@@ -378,7 +377,7 @@ export default function AnalyzePage() {
 
   function renderResults() {
     if (!result) return null;
-    const { recommended_size, confidence_pct, explanation_tr, risk_level_tr, risk_factors_tr, community_insights_tr } = result;
+    const { recommended_size, confidence_score, confidence_pct, explanation_tr, risk_level, risk_level_tr, risk_factors_tr, community_insights_tr } = result;
 
     return (
       <motion.div
@@ -399,7 +398,7 @@ export default function AnalyzePage() {
               {recommended_size}
             </span>
             <span className="text-sm text-muted-foreground">
-              Güven: %{confidence_pct}
+              Güven: {confidence_pct}
             </span>
           </div>
           <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
@@ -416,14 +415,14 @@ export default function AnalyzePage() {
           <div className="flex items-center gap-3">
             <div className="relative h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
               <motion.div
-                className={`h-full rounded-full ${confidenceColor(confidence_pct)}`}
+                className={`h-full rounded-full ${confidenceColor(confidence_score)}`}
                 initial={{ width: 0 }}
-                animate={{ width: `${confidence_pct}%` }}
+                animate={{ width: `${Math.round(confidence_score * 100)}%` }}
                 transition={{ duration: 0.7, ease: "easeOut" }}
               />
             </div>
             <span className="w-10 text-right text-sm font-medium text-foreground">
-              %{confidence_pct}
+              {confidence_pct}
             </span>
           </div>
         </div>
@@ -434,7 +433,7 @@ export default function AnalyzePage() {
             Risk Değerlendirmesi
           </p>
           <span
-            className={`inline-block rounded-full px-3 py-0.5 text-xs font-semibold ${riskBadgeClass(risk_level_tr)}`}
+            className={`inline-block rounded-full px-3 py-0.5 text-xs font-semibold ${riskBadgeClass(risk_level)}`}
           >
             {risk_level_tr}
           </span>
