@@ -37,7 +37,15 @@
       "Bash(.venv/Scripts/python -m pytest tests/test_integration.py tests/test_pipeline.py -q --tb=line)",
       "Bash(docker info *)",
       "Bash(python -m pytest --tb=short -q)",
-      "PowerShell($env:PYTHONIOENCODING=\"utf-8\"; cd \"C:\\\\Users\\\\zorlu\\\\OneDrive\\\\Desktop\\\\HACKATHON\"; python scripts\\\\e2e_smoke.py 2>&1)"
+      "PowerShell($env:PYTHONIOENCODING=\"utf-8\"; cd \"C:\\\\Users\\\\zorlu\\\\OneDrive\\\\Desktop\\\\HACKATHON\"; python scripts\\\\e2e_smoke.py 2>&1)",
+      "mcp__ruflo__memory_store",
+      "mcp__ruflo__agent_spawn",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(curl -s http://localhost:3000/analyze)",
+      "PowerShell($env:PYTHONIOENCODING=\"utf-8\"; cd \"C:\\\\Users\\\\zorlu\\\\OneDrive\\\\Desktop\\\\HACKATHON\"; python scripts\\\\try_system.py 2>&1)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/onboarding)",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/profile -F height_cm=170 -F weight_kg=65 -F fit_preference=regular -F 'body_image=@/tmp/fake.bmp;type=image/bmp')",
+      "Bash(curl -sS -w 'HTTP %{http_code}\\\\n' -X POST http://localhost:8000/api/v1/profile -F height_cm=170 -F weight_kg=65 -F fit_preference=regular -F 'body_image=@/tmp/fake.bmp;type=image/bmp')"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -3,12 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, MessageSquare } from "lucide-react";
+import { Upload, MessageSquare, ArrowRight, RefreshCw, AlertTriangle, ShieldCheck } from "lucide-react";
 import { AnalysisProgress } from "@/components/analysis-progress";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 type Phase =
   | "idle"
@@ -24,8 +20,8 @@ type Phase =
 
 interface AnalysisResult {
   recommended_size: string | null;
-  confidence_score: number | null;   // float 0-1 from backend
-  confidence_pct: string | null;     // "%81" formatted string from backend
+  confidence_score: number | null;
+  confidence_pct: string | null;
   explanation_tr: string | null;
   uncertainty_tr: string | null;
   risk_level: "low" | "medium" | "high" | null;
@@ -34,54 +30,28 @@ interface AnalysisResult {
   community_insights_tr: string[] | null;
 }
 
-// Map phase to a numeric step for the progress component (0 = uploading, 1-6)
 function phaseToStep(phase: Phase): number {
   const map: Record<Phase, number> = {
-    idle: 0,
-    uploading: 0,
-    step_1: 1,
-    step_2: 2,
-    step_3: 3,
-    step_4: 4,
-    step_5: 5,
-    step_6: 6,
-    done: 6,
-    error: 0,
+    idle: 0, uploading: 0, step_1: 1, step_2: 2, step_3: 3,
+    step_4: 4, step_5: 5, step_6: 6, done: 6, error: 0,
   };
   return map[phase];
 }
 
-const BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-
-// ---------------------------------------------------------------------------
-// Confidence bar color
-// ---------------------------------------------------------------------------
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 function confidenceColor(score: number): string {
   const pct = score * 100;
-  if (pct > 70) return "bg-green-500";
-  if (pct >= 50) return "bg-amber-400";
-  return "bg-red-500";
+  if (pct > 70) return "bg-success";
+  if (pct >= 50) return "bg-warning";
+  return "bg-danger";
 }
 
-// ---------------------------------------------------------------------------
-// Risk badge — uses English risk_level enum, not the Turkish display string
-// ---------------------------------------------------------------------------
-
-const RISK_BADGE_MAP: Record<string, string> = {
-  low:    "bg-green-100 text-green-700",
-  medium: "bg-amber-100 text-amber-700",
-  high:   "bg-red-100 text-red-700",
+const RISK_PILL: Record<string, string> = {
+  low: "text-success bg-success/10 border-success/30",
+  medium: "text-warning bg-warning/10 border-warning/30",
+  high: "text-danger bg-danger/10 border-danger/30",
 };
-
-function riskBadgeClass(level: string): string {
-  return RISK_BADGE_MAP[level] ?? "bg-muted text-muted-foreground";
-}
-
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
 
 export default function AnalyzePage() {
   const [phase, setPhase] = useState<Phase>("idle");
@@ -91,26 +61,16 @@ export default function AnalyzePage() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>("");
 
-  // Refs to track async state without stale closures
   const resultRef = useRef<AnalysisResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Read user id from localStorage on mount
   useEffect(() => {
-    const id = localStorage.getItem("hiwaloy_user_id");
-    setUserId(id);
+    setUserId(localStorage.getItem("hiwaloy_user_id"));
   }, []);
 
-  // Cleanup preview URL on unmount
   useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    };
+    return () => { if (previewUrl) URL.revokeObjectURL(previewUrl); };
   }, [previewUrl]);
-
-  // --------------------------------------------------------------------------
-  // File selection
-  // --------------------------------------------------------------------------
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -124,62 +84,29 @@ export default function AnalyzePage() {
     fileInputRef.current?.click();
   }
 
-  // --------------------------------------------------------------------------
-  // Step timer progression
-  // --------------------------------------------------------------------------
-
   function startStepTimers() {
+    const order: Phase[] = [
+      "uploading", "step_1", "step_2", "step_3", "step_4", "step_5", "step_6", "done", "error",
+    ];
     const advance = (target: Phase, delay: number) => {
       setTimeout(() => {
-        // Only advance if we haven't already moved past this step
         setPhase((prev) => {
-          const order: Phase[] = [
-            "uploading",
-            "step_1",
-            "step_2",
-            "step_3",
-            "step_4",
-            "step_5",
-            "step_6",
-            "done",
-            "error",
-          ];
           const prevIdx = order.indexOf(prev);
           const targetIdx = order.indexOf(target);
-          // Only advance, never go back; also don't overwrite done/error
-          if (
-            prevIdx < targetIdx &&
-            prev !== "done" &&
-            prev !== "error"
-          ) {
-            return target;
-          }
+          if (prevIdx < targetIdx && prev !== "done" && prev !== "error") return target;
           return prev;
         });
       }, delay);
     };
 
-    // Steps compressed to ~3.5 s so DEMO_MODE (~1 s pipeline) flows naturally.
-    // Real Gemini (~5–10 s) will arrive after all timers and the API callback
-    // flips to "done" directly; the 35 s AbortController handles actual hangs.
-    advance("step_1",  400);
-    advance("step_2",  900);
+    advance("step_1", 400);
+    advance("step_2", 900);
     advance("step_3", 1600);
     advance("step_4", 2300);
     advance("step_5", 2900);
     advance("step_6", 3400);
-
-    // After step_6 fires, flip to done if the API has already returned.
-    setTimeout(() => {
-      if (resultRef.current) {
-        setPhase("done");
-      }
-    }, 3600);
+    setTimeout(() => { if (resultRef.current) setPhase("done"); }, 3600);
   }
-
-  // --------------------------------------------------------------------------
-  // Submit
-  // --------------------------------------------------------------------------
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -200,9 +127,7 @@ export default function AnalyzePage() {
       fd.append("garment_image", garmentFile);
 
       const res = await fetch(`${BASE}/api/v1/analyze`, {
-        method: "POST",
-        body: fd,
-        signal: controller.signal,
+        method: "POST", body: fd, signal: controller.signal,
       });
       clearTimeout(timeoutId);
 
@@ -216,8 +141,6 @@ export default function AnalyzePage() {
       resultRef.current = data;
       setResult(data);
 
-      // Flip to done as soon as we're past step_1; the 3.6s timer handles the
-      // case where the API beats the timers entirely.
       const DONE_ELIGIBLE: Phase[] = ["step_2", "step_3", "step_4", "step_5", "step_6"];
       setPhase((prev) => (DONE_ELIGIBLE.includes(prev) ? "done" : prev));
     } catch (err) {
@@ -234,10 +157,6 @@ export default function AnalyzePage() {
     }
   }
 
-  // --------------------------------------------------------------------------
-  // Reset
-  // --------------------------------------------------------------------------
-
   function handleReset() {
     setPhase("idle");
     setGarmentFile(null);
@@ -250,22 +169,11 @@ export default function AnalyzePage() {
     resultRef.current = null;
   }
 
-  // --------------------------------------------------------------------------
-  // Derived booleans
-  // --------------------------------------------------------------------------
-
   const isInProgress =
-    phase === "uploading" ||
-    phase === "step_1" ||
-    phase === "step_2" ||
-    phase === "step_3" ||
-    phase === "step_4" ||
-    phase === "step_5" ||
-    phase === "step_6";
+    phase === "uploading" || phase === "step_1" || phase === "step_2" ||
+    phase === "step_3" || phase === "step_4" || phase === "step_5" || phase === "step_6";
 
-  // --------------------------------------------------------------------------
-  // Render helpers
-  // --------------------------------------------------------------------------
+  // -------- Renderers --------
 
   function renderNoProfile() {
     return (
@@ -274,16 +182,19 @@ export default function AnalyzePage() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -12 }}
-        className="flex flex-col items-center gap-4 rounded-xl border border-border bg-background p-8 text-center shadow-sm"
+        className="panel flex flex-col items-start gap-4 p-8"
       >
+        <h2 className="text-lg font-semibold text-foreground">
+          Önce profilini oluştur
+        </h2>
         <p className="text-sm text-muted-foreground">
-          Önce profilinizi oluşturmanız gerekiyor.
+          Beden öneri sistemi için boy, kilo ve fit tercihin gerekli.
         </p>
         <Link
           href="/onboarding"
-          className="inline-flex items-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-80"
+          className="inline-flex items-center gap-2 rounded-pill bg-brand-gradient px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110"
         >
-          Profil Oluştur
+          Profil Oluştur <ArrowRight size={14} />
         </Link>
       </motion.div>
     );
@@ -297,33 +208,37 @@ export default function AnalyzePage() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -12 }}
-        className="flex flex-col gap-6"
+        className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_1fr]"
       >
         {/* Drop zone */}
-        <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-foreground">
-            Kıyafet Görseli
-          </span>
+        <div className="panel p-6">
+          <p className="text-sm font-medium text-foreground">Kıyafet Görseli</p>
+          <p className="mt-1 text-xs text-subtle-foreground">
+            Yüklediğin görsel yalnızca analizde kullanılır.
+          </p>
+
           <button
             type="button"
             onClick={handleDropZoneClick}
-            className="flex min-h-[180px] w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border bg-muted/40 transition-colors hover:border-foreground/30 hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+            className="mt-4 flex min-h-[220px] w-full flex-col items-center justify-center gap-3 rounded-card border border-dashed border-border bg-panel-elev transition hover:border-brand/50 focus:outline-none focus-visible:ring-2 ring-brand"
           >
             {previewUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={previewUrl}
                 alt="Seçilen kıyafet görseli"
-                className="max-h-[160px] rounded-lg object-contain"
+                className="max-h-[200px] rounded-md object-contain"
               />
             ) : (
               <>
-                <Upload className="h-8 w-8 text-muted-foreground/50" />
-                <span className="text-sm text-muted-foreground">
-                  Görsel seçmek için tıklayın
+                <span className="grid h-11 w-11 place-items-center rounded-full bg-brand-soft text-brand">
+                  <Upload size={18} />
                 </span>
-                <span className="text-xs text-muted-foreground/60">
-                  JPEG veya PNG, maks 8 MB
+                <span className="text-sm font-medium text-foreground">
+                  Görsel seçmek için tıkla
+                </span>
+                <span className="text-xs text-subtle-foreground">
+                  JPG, JPEG veya PNG · maks 8 MB
                 </span>
               </>
             )}
@@ -331,23 +246,51 @@ export default function AnalyzePage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/jpeg,image/png"
+            accept="image/jpeg,image/png,.jpg,.jpeg,.png"
             className="hidden"
             onChange={handleFileChange}
           />
           {garmentFile && (
-            <p className="text-xs text-muted-foreground">{garmentFile.name}</p>
+            <p className="mt-2 truncate text-xs text-subtle-foreground">
+              {garmentFile.name}
+            </p>
           )}
         </div>
 
-        {/* Submit */}
-        <button
-          type="submit"
-          disabled={!garmentFile || !userId}
-          className="w-full rounded-lg bg-foreground px-4 py-3 text-sm font-semibold text-background transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-30"
-        >
-          Analizi Başlat
-        </button>
+        {/* Right column: explanatory + submit */}
+        <div className="panel flex flex-col gap-4 p-6">
+          <p className="text-sm font-medium text-foreground">Analiz Hakkında</p>
+          <ul className="flex flex-col gap-3 text-sm text-muted-foreground">
+            <li className="flex gap-3">
+              <span className="mt-1 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-soft text-[10px] font-bold text-brand">
+                1
+              </span>
+              Görseli analiz ederek kesim, kumaş ve marka kalıbı tahmin edilir.
+            </li>
+            <li className="flex gap-3">
+              <span className="mt-1 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-soft text-[10px] font-bold text-brand">
+                2
+              </span>
+              Profilindeki ölçüler ve benzer kullanıcı yorumları ile karşılaştırılır.
+            </li>
+            <li className="flex gap-3">
+              <span className="mt-1 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-soft text-[10px] font-bold text-brand">
+                3
+              </span>
+              Beden önerisi, güven skoru ve risk açıklaması üretilir.
+            </li>
+          </ul>
+
+          <div className="flex-1" />
+
+          <button
+            type="submit"
+            disabled={!garmentFile || !userId}
+            className="inline-flex items-center justify-center gap-2 rounded-pill bg-brand-gradient px-5 py-3 text-sm font-semibold text-white brand-glow transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            Analizi Başlat <ArrowRight size={14} />
+          </button>
+        </div>
       </motion.form>
     );
   }
@@ -360,13 +303,16 @@ export default function AnalyzePage() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -12 }}
-        className="flex flex-col gap-6 rounded-xl border border-border bg-background p-6 shadow-sm"
+        className="panel flex flex-col gap-5 p-6"
       >
-        <p className="text-sm font-medium text-foreground">
-          {isFinalizingStep
-            ? "Sonuçlar hazırlanıyor, lütfen bekleyin…"
-            : "Analiziniz hazırlanıyor…"}
-        </p>
+        <div className="flex items-center gap-2">
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-soft text-brand">
+            <RefreshCw size={14} className="animate-spin" />
+          </span>
+          <p className="text-sm font-medium text-foreground">
+            {isFinalizingStep ? "Sonuçlar hazırlanıyor…" : "Analiz çalışıyor…"}
+          </p>
+        </div>
         <AnalysisProgress currentStep={phaseToStep(phase)} />
       </motion.div>
     );
@@ -375,20 +321,14 @@ export default function AnalyzePage() {
   function renderResults() {
     if (!result) return null;
     const {
-      recommended_size,
-      confidence_score,
-      confidence_pct,
-      explanation_tr,
-      uncertainty_tr,
-      risk_level,
-      risk_level_tr,
-      risk_factors_tr,
-      community_insights_tr,
+      recommended_size, confidence_score, confidence_pct, explanation_tr,
+      uncertainty_tr, risk_level, risk_level_tr, risk_factors_tr, community_insights_tr,
     } = result;
 
     const safeRiskFactors = risk_factors_tr ?? [];
     const safeInsights = community_insights_tr ?? [];
     const safeConfidence = confidence_score ?? 0;
+    const riskPill = risk_level ? RISK_PILL[risk_level] : "";
 
     return (
       <motion.div
@@ -397,105 +337,123 @@ export default function AnalyzePage() {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -12 }}
         transition={{ duration: 0.4 }}
-        className="flex flex-col gap-6"
+        className="grid grid-cols-1 gap-5 lg:grid-cols-[1.15fr_1fr]"
       >
-        {/* Recommendation card */}
-        <div className="rounded-xl border border-border bg-background p-5 shadow-sm">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Beden Önerisi
-          </p>
-          <div className="flex flex-col items-center gap-1 py-2">
-            <span className="text-4xl font-bold text-foreground">
-              {recommended_size ?? "—"}
-            </span>
-            <span className="text-sm text-muted-foreground">
-              Güven: {confidence_pct ?? "—"}
-            </span>
+        {/* Big recommendation card */}
+        <div className="panel flex flex-col gap-5 p-6">
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                Beden Önerisi
+              </p>
+              <p className="mt-2 text-6xl font-bold text-foreground">
+                {recommended_size ?? "—"}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                Güven Skoru
+              </p>
+              <p className="mt-2 text-3xl font-bold brand-text">
+                {confidence_pct ?? "—"}
+              </p>
+            </div>
           </div>
+
+          <div className="h-2 overflow-hidden rounded-full bg-panel-elev">
+            <motion.div
+              className={`h-full rounded-full ${confidenceColor(safeConfidence)}`}
+              initial={{ width: 0 }}
+              animate={{ width: `${Math.round(safeConfidence * 100)}%` }}
+              transition={{ duration: 0.7, ease: "easeOut" }}
+            />
+          </div>
+
           {explanation_tr && (
-            <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
-              <span className="mr-1 font-medium text-foreground">Açıklama:</span>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              <span className="font-medium text-foreground">Açıklama: </span>
               {explanation_tr}
             </p>
           )}
           {uncertainty_tr && (
-            <p className="mt-2 text-xs text-muted-foreground/70 leading-relaxed italic">
+            <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs leading-relaxed text-warning">
+              <span className="mr-1 inline-flex items-center gap-1 font-medium">
+                <AlertTriangle size={12} /> Belirsizlik:
+              </span>
               {uncertainty_tr}
-            </p>
+            </div>
           )}
+
+          <button
+            type="button"
+            onClick={handleReset}
+            className="inline-flex w-fit items-center gap-2 rounded-pill border border-border bg-panel-elev px-4 py-2 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+          >
+            <RefreshCw size={12} /> Yeni Analiz
+          </button>
         </div>
 
-        {/* Confidence bar */}
-        <div className="rounded-xl border border-border bg-background p-5 shadow-sm">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Güven Skoru
-          </p>
-          <div className="flex items-center gap-3">
-            <div className="relative h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
-              <motion.div
-                className={`h-full rounded-full ${confidenceColor(safeConfidence)}`}
-                initial={{ width: 0 }}
-                animate={{ width: `${Math.round(safeConfidence * 100)}%` }}
-                transition={{ duration: 0.7, ease: "easeOut" }}
-              />
+        {/* Right column: Risk + Community */}
+        <div className="flex flex-col gap-5">
+          <div className="panel p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                Satın Alma Riski
+              </p>
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-soft text-brand">
+                <ShieldCheck size={14} />
+              </span>
             </div>
-            <span className="w-10 text-right text-sm font-medium text-foreground">
-              {confidence_pct ?? "—"}
-            </span>
+            <p className="mt-2 text-lg font-semibold text-foreground">
+              {risk_level_tr ?? "—"}
+            </p>
+            {risk_level && (
+              <span
+                className={`mt-2 inline-flex w-fit rounded-pill border px-2.5 py-0.5 text-[11px] font-medium ${riskPill}`}
+              >
+                {risk_level_tr}
+              </span>
+            )}
+            {safeRiskFactors.length > 0 && (
+              <ul className="mt-4 flex flex-col gap-2">
+                {safeRiskFactors.map((factor, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 text-sm text-muted-foreground"
+                  >
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand/70" />
+                    {factor}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="panel p-5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+              Topluluk İçgörüleri
+            </p>
+            {safeInsights.length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Henüz yeterli kullanıcı yorumu bulunmuyor.
+              </p>
+            ) : (
+              <ul className="mt-3 flex flex-col gap-3">
+                {safeInsights.map((insight, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground"
+                  >
+                    <MessageSquare
+                      className="mt-0.5 h-4 w-4 shrink-0 text-brand/70"
+                    />
+                    {insight}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
-
-        {/* Risk panel */}
-        <div className="rounded-xl border border-border bg-background p-5 shadow-sm">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Risk Değerlendirmesi
-          </p>
-          <span
-            className={`inline-block rounded-full px-3 py-0.5 text-xs font-semibold ${riskBadgeClass(risk_level ?? "")}`}
-          >
-            {risk_level_tr ?? "—"}
-          </span>
-          {safeRiskFactors.length > 0 && (
-            <ul className="mt-4 flex flex-col gap-2">
-              {safeRiskFactors.map((factor, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
-                  {factor}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Community insights */}
-        <div className="rounded-xl border border-border bg-background p-5 shadow-sm">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Topluluk Yorumları
-          </p>
-          {safeInsights.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Henüz yeterli kullanıcı yorumu bulunmuyor.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-3">
-              {safeInsights.map((insight, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />
-                  {insight}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Reset button */}
-        <button
-          type="button"
-          onClick={handleReset}
-          className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-        >
-          Yeni Analiz
-        </button>
       </motion.div>
     );
   }
@@ -507,56 +465,50 @@ export default function AnalyzePage() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -12 }}
-        className="flex flex-col items-center gap-4 rounded-xl border border-border bg-background p-8 text-center shadow-sm"
+        className="panel flex flex-col items-start gap-3 p-6"
       >
+        <span className="grid h-9 w-9 place-items-center rounded-full bg-danger/15 text-danger">
+          <AlertTriangle size={16} />
+        </span>
         <p className="text-sm text-muted-foreground">
           {errorMsg || "Analiz sırasında bir hata oluştu."}
         </p>
         <button
           type="button"
           onClick={handleReset}
-          className="inline-flex items-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-80"
+          className="inline-flex items-center gap-2 rounded-pill bg-brand-gradient px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110"
         >
-          Tekrar Dene
+          Tekrar Dene <RefreshCw size={12} />
         </button>
       </motion.div>
     );
   }
 
-  // --------------------------------------------------------------------------
-  // Main render
-  // --------------------------------------------------------------------------
+  // -------- Main render --------
 
   return (
-    <main className="min-h-dvh py-12">
-      <div className="mx-auto w-full max-w-[600px] px-4">
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Kıyafet Analizi
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Kıyafet görselini yükle, yapay zeka sizin için analiz etsin.
-          </p>
-        </div>
+    <div className="flex flex-col gap-6 pt-2">
+      <header>
+        <span className="inline-flex rounded-pill border border-brand/30 bg-brand-soft px-3 py-1 text-[11px] font-medium text-brand">
+          Analiz
+        </span>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+          Kıyafetin sende
+          <br />
+          <span className="brand-text">nasıl duracağını gör.</span>
+        </h1>
+        <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+          Bir kıyafet görseli yükle, AI sana özel beden önerisini hazırlasın.
+        </p>
+      </header>
 
-        <AnimatePresence mode="wait">
-          {/* No profile */}
-          {phase === "idle" && !userId && renderNoProfile()}
-
-          {/* Upload form */}
-          {phase === "idle" && userId && renderUploadForm()}
-
-          {/* In progress */}
-          {isInProgress && renderProgress()}
-
-          {/* Results */}
-          {phase === "done" && renderResults()}
-
-          {/* Error */}
-          {phase === "error" && renderError()}
-        </AnimatePresence>
-      </div>
-    </main>
+      <AnimatePresence mode="wait">
+        {phase === "idle" && !userId && renderNoProfile()}
+        {phase === "idle" && userId && renderUploadForm()}
+        {isInProgress && renderProgress()}
+        {phase === "done" && renderResults()}
+        {phase === "error" && renderError()}
+      </AnimatePresence>
+    </div>
   );
 }

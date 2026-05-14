@@ -50,7 +50,7 @@ export const tr = {
     title: "Kıyafet Analizi",
     subtitle: "Kıyafet görselini yükleyin, AI beden önerinizi hazırlasın.",
     upload: "Görsel Yükle",
-    uploadHint: "JPEG veya PNG, maks 8 MB",
+    uploadHint: "JPG, JPEG veya PNG, maks 8 MB",
     noProfile: "Önce profilinizi oluşturun.",
     goToProfile: "Profile Git",
     start: "Analizi Başlat",

@@ -33,7 +33,7 @@ def _detect_format(header: bytes) -> str:
     if header[:8] == _PNG_MAGIC:
         return "png"
     raise ImageValidationError(
-        "Desteklenmeyen dosya formatı. Yalnızca JPEG ve PNG kabul edilmektedir."
+        "Desteklenmeyen dosya formatı. Yalnızca JPG/JPEG ve PNG kabul edilmektedir."
     )
 
 

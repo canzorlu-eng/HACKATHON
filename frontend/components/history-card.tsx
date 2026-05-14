@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { ArrowUpRight } from "lucide-react";
 
 export interface HistoryItem {
   analysis_id: string;
@@ -22,18 +23,15 @@ const riskConfig: Record<
 > = {
   low: {
     label: "Düşük Risk",
-    className:
-      "text-green-700 bg-green-50 border border-green-200",
+    className: "text-success bg-success/10 border-success/30",
   },
   medium: {
     label: "Orta Risk",
-    className:
-      "text-amber-700 bg-amber-50 border border-amber-200",
+    className: "text-warning bg-warning/10 border-warning/30",
   },
   high: {
     label: "Yüksek Risk",
-    className:
-      "text-red-700 bg-red-50 border border-red-200",
+    className: "text-danger bg-danger/10 border-danger/30",
   },
 };
 
@@ -47,34 +45,44 @@ export function HistoryCard({ item, index }: HistoryCardProps) {
   const risk = item.risk_level ? riskConfig[item.risk_level] : null;
 
   return (
-    <Link href={`/history/${item.analysis_id}`} className="block rounded-xl focus:outline-none focus:ring-2 focus:ring-foreground/20">
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, delay: index * 0.06, ease: "easeOut" }}
-      className="rounded-xl border border-border bg-background p-4 shadow-sm flex items-center gap-4 cursor-pointer hover:shadow-md transition-shadow"
+    <Link
+      href={`/history/${item.analysis_id}`}
+      className="block rounded-card focus:outline-none focus:ring-2 ring-brand"
     >
-      {/* Size circle */}
-      <div className="w-12 h-12 rounded-full bg-foreground text-background flex items-center justify-center shrink-0 text-lg font-bold select-none">
-        {item.recommended_size ?? "–"}
-      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, delay: index * 0.05, ease: "easeOut" }}
+        className="panel flex items-center gap-4 p-4 transition hover:border-border-strong"
+      >
+        {/* Size circle */}
+        <div className="grid h-12 w-12 shrink-0 select-none place-items-center rounded-card bg-brand-soft text-lg font-bold text-brand">
+          {item.recommended_size ?? "—"}
+        </div>
 
-      {/* Info */}
-      <div className="flex flex-col gap-1 min-w-0">
-        <span className="text-sm text-muted-foreground leading-none">
-          {formattedDate}
-        </span>
+        {/* Info */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <p className="truncate text-sm font-medium text-foreground">
+            Analiz {item.analysis_id.slice(0, 8)}
+          </p>
+          <span className="text-xs text-subtle-foreground">
+            {formattedDate}
+          </span>
+        </div>
+
+        {/* Risk pill */}
         {risk ? (
           <span
-            className={`inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${risk.className}`}
+            className={`inline-flex w-fit items-center rounded-pill border px-2.5 py-0.5 text-xs font-medium ${risk.className}`}
           >
             {risk.label}
           </span>
         ) : (
-          <span className="text-sm text-muted-foreground">—</span>
+          <span className="text-xs text-subtle-foreground">—</span>
         )}
-      </div>
-    </motion.div>
+
+        <ArrowUpRight size={14} className="text-subtle-foreground" />
+      </motion.div>
     </Link>
   );
 }

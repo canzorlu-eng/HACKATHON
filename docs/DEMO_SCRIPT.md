@@ -127,7 +127,7 @@ Sunumdan önce:
 - [ ] `.\start-demo.ps1` (Windows) veya `./start-demo.sh` (macOS/Linux) ile stack başarıyla ayağa kalkıyor
 - [ ] http://localhost:3000 açılıyor
 - [ ] http://localhost:8000/api/v1/health `{"status":"ok"}` döndürüyor
-- [ ] Yüklenecek bir kıyafet görseli hazır (JPEG veya PNG, max 8MB)
+- [ ] Yüklenecek bir kıyafet görseli hazır (JPG, JPEG veya PNG, max 8MB)
 - [ ] Tarayıcı localStorage temiz (eski profil yoksa daha temiz demo)
 - [ ] `.env` dosyasında `DEMO_MODE=true`
 

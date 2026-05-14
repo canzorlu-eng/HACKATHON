@@ -18,28 +18,24 @@ const STEPS = [
 
 const containerVariants = {
   hidden: {},
-  visible: {
-    transition: {
-      staggerChildren: 0.15,
-    },
-  },
+  visible: { transition: { staggerChildren: 0.12 } },
 };
 
 const itemVariants = {
-  hidden: { opacity: 0, x: -12 },
-  visible: { opacity: 1, x: 0, transition: { duration: 0.35 } },
+  hidden: { opacity: 0, x: -10 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.3 } },
 };
 
 export function AnalysisProgress({ currentStep }: AnalysisProgressProps) {
   return (
     <motion.ul
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-3"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
     >
       {STEPS.map((label, index) => {
-        const stepNumber = index + 1; // steps are 1-indexed
+        const stepNumber = index + 1;
         const isDone = stepNumber < currentStep;
         const isActive = stepNumber === currentStep;
         const isPending = stepNumber > currentStep;
@@ -47,37 +43,37 @@ export function AnalysisProgress({ currentStep }: AnalysisProgressProps) {
         return (
           <motion.li
             key={stepNumber}
-            className="flex items-center gap-3"
+            className="flex items-center gap-3 rounded-md px-2 py-1.5"
             variants={itemVariants}
           >
-            {/* Icon */}
             <span className="shrink-0">
               {isDone && (
                 <CheckCircle2
-                  className="h-5 w-5 text-green-500"
+                  className="h-5 w-5 text-success"
                   strokeWidth={2}
                 />
               )}
               {isActive && (
                 <Loader2
-                  className="h-5 w-5 animate-spin text-foreground"
+                  className="h-5 w-5 animate-spin text-brand"
                   strokeWidth={2}
                 />
               )}
               {isPending && (
                 <Circle
-                  className="h-5 w-5 text-muted-foreground/40"
+                  className="h-5 w-5 text-subtle-foreground/50"
                   strokeWidth={2}
                 />
               )}
             </span>
 
-            {/* Label */}
             <span
               className={
                 isPending
-                  ? "text-sm text-muted-foreground/40"
-                  : "text-sm text-foreground"
+                  ? "text-sm text-subtle-foreground"
+                  : isActive
+                  ? "text-sm font-medium text-foreground"
+                  : "text-sm text-muted-foreground"
               }
             >
               {label}
