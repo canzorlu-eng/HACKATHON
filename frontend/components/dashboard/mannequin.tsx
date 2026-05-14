@@ -2,12 +2,42 @@
 
 import { motion } from "framer-motion";
 
+interface MannequinHeroProps {
+  /**
+   * When supplied, the floating callouts are computed from the user's real
+   * profile measurements (BMI-derived). When omitted, no callouts render —
+   * the mannequin stays decorative and we don't fake numbers we don't have.
+   */
+  profile?: {
+    height_cm?: number | null;
+    weight_kg?: number | null;
+    fit_preference?: string | null;
+  };
+}
+
+function shoulderEstimate(bmi: number): string {
+  if (bmi < 20) return "Dar";
+  if (bmi < 26) return "Orta";
+  return "Geniş";
+}
+
+function bodyType(bmi: number): string {
+  if (bmi < 18.5) return "İnce";
+  if (bmi < 25) return "Dengeli";
+  if (bmi < 30) return "Atletik";
+  return "Geniş";
+}
+
 /**
- * Static SVG mannequin silhouette with subtle floating callouts.
- * Lightweight — no Three.js, no GPU usage. Decorative only:
- * the labels are illustrative (not user data).
+ * Static SVG mannequin silhouette with optional profile-derived callouts.
+ * Lightweight — no Three.js, no GPU usage.
  */
-export function MannequinHero() {
+export function MannequinHero({ profile }: MannequinHeroProps = {}) {
+  const h = profile?.height_cm;
+  const w = profile?.weight_kg;
+  const hasMeasurements = !!(h && w && h > 0 && w > 0);
+  const bmi = hasMeasurements ? w! / Math.pow(h! / 100, 2) : null;
+
   return (
     <div className="relative mx-auto aspect-square w-full max-w-[480px]">
       {/* Glow rings */}
@@ -83,11 +113,25 @@ export function MannequinHero() {
         <line x1="100" y1="152" x2="100" y2="235" stroke="url(#mq-stroke)" strokeWidth="0.5" opacity="0.5" />
       </motion.svg>
 
-      {/* Floating callouts (decorative labels, not user data) */}
-      <Callout className="left-2 top-[16%]" title="Omuz Genişliği" value="Orta" />
-      <Callout className="right-2 top-[44%]" title="Uyum Tahmini" value="%87" accent />
-      <Callout className="left-2 top-[58%]" title="Vücut Tipi" value="Dengeli" />
-      <Callout className="right-2 top-[72%]" title="Risk Seviyesi" value="Düşük" />
+      {/* Floating callouts — only when we have real profile data to back them.
+          No "Uyum Tahmini" or "Risk Seviyesi" here on the home view — those
+          require an actual analysis and live on the /analyze page. */}
+      {bmi !== null && (
+        <>
+          <Callout
+            className="left-2 top-[16%]"
+            title="Omuz Genişliği"
+            value={shoulderEstimate(bmi)}
+            tahmini
+          />
+          <Callout
+            className="left-2 top-[58%]"
+            title="Vücut Tipi"
+            value={bodyType(bmi)}
+            tahmini
+          />
+        </>
+      )}
     </div>
   );
 }
@@ -97,11 +141,13 @@ function Callout({
   title,
   value,
   accent = false,
+  tahmini = false,
 }: {
   className?: string;
   title: string;
   value: string;
   accent?: boolean;
+  tahmini?: boolean;
 }) {
   return (
     <motion.div
@@ -116,7 +162,14 @@ function Callout({
         className ?? "",
       ].join(" ")}
     >
-      <p className="text-[10px] text-subtle-foreground">{title}</p>
+      <p className="text-[10px] text-subtle-foreground">
+        {title}
+        {tahmini && (
+          <span className="ml-1 text-[9px] text-subtle-foreground/70">
+            · tahmini
+          </span>
+        )}
+      </p>
       <p
         className={accent ? "font-semibold text-brand" : "font-medium text-foreground"}
       >

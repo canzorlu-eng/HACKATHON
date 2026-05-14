@@ -39,3 +39,4 @@ class GarmentUploadResponse(BaseModel):
     risk_factors_tr: Optional[list[str]] = None
     uncertainty_tr: Optional[str] = None
     community_insights_tr: Optional[list[str]] = None
+    risk_heatmap: Optional[list[dict]] = None

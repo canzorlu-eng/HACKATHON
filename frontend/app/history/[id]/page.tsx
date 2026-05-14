@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { MessageSquare, ArrowLeft, AlertTriangle, ShieldCheck } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { BodyHeatmap, type HeatmapRegion } from "@/components/dashboard/body-heatmap";
 
 interface FormattedResponse {
   recommended_size?: string | null;
@@ -17,6 +18,7 @@ interface FormattedResponse {
   risk_level_tr?: string | null;
   risk_factors_tr?: string[] | null;
   community_insights_tr?: string[] | null;
+  risk_heatmap?: HeatmapRegion[] | null;
 }
 
 interface AnalysisDetail {
@@ -255,6 +257,10 @@ export default function HistoryDetailPage() {
           </motion.div>
         </div>
       </div>
+
+      {fr.risk_heatmap && fr.risk_heatmap.length > 0 && (
+        <BodyHeatmap regions={fr.risk_heatmap} />
+      )}
     </div>
   );
 }

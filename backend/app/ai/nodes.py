@@ -343,6 +343,135 @@ def risk_evaluator_node(state: PipelineState) -> dict:
 # Node 6: Turkish formatter (final output assembler)
 # ---------------------------------------------------------------------------
 
+_REGION_LOW    = "low"
+_REGION_MEDIUM = "medium"
+_REGION_HIGH   = "high"
+
+
+def _compute_risk_heatmap(
+    body: dict,
+    garment: dict,
+    has_body_image: bool,
+    height_cm: int,
+    weight_kg: int,
+) -> list[dict]:
+    """Derive per-body-region risk status from upstream analysis data.
+
+    Returns a list of {"region", "label_tr", "status", "reason_tr"} dicts.
+    Without a body image, body-shape-dependent regions are capped at
+    "medium" — we don't claim "high" on data we don't have.
+    """
+    fit_type      = garment.get("fit_type", "regular")
+    shoulder_est  = body.get("shoulder_width_estimate", "standart")
+    fabric        = (garment.get("fabric_cues") or "").lower()
+    brand         = garment.get("brand_sizing_tendency", "standart")
+
+    try:
+        bmi = weight_kg / ((height_cm / 100) ** 2) if height_cm else 22.0
+    except ZeroDivisionError:
+        bmi = 22.0
+
+    def cap(status: str) -> str:
+        if not has_body_image and status == _REGION_HIGH:
+            return _REGION_MEDIUM
+        return status
+
+    regions: list[dict] = []
+
+    # ── Omuz ─────────────────────────────────────────────
+    if fit_type == "slim-cut" and shoulder_est == "geniş":
+        regions.append({
+            "region": "omuz",
+            "label_tr": "Omuz",
+            "status": cap(_REGION_HIGH),
+            "reason_tr": "Dar kesim ve geniş omuz tahmini birleşince omuz alanı sıkışabilir.",
+        })
+    elif fit_type == "slim-cut":
+        regions.append({
+            "region": "omuz",
+            "label_tr": "Omuz",
+            "status": _REGION_MEDIUM,
+            "reason_tr": "Slim-cut kesim — omuz hareket alanı sınırlı olabilir.",
+        })
+    elif brand == "küçük kalıplı":
+        regions.append({
+            "region": "omuz",
+            "label_tr": "Omuz",
+            "status": _REGION_MEDIUM,
+            "reason_tr": "Marka küçük kalıplı — omuzlarda darlık olabilir.",
+        })
+    else:
+        regions.append({
+            "region": "omuz",
+            "label_tr": "Omuz",
+            "status": _REGION_LOW,
+            "reason_tr": "Omuz alanında belirgin bir risk yok.",
+        })
+
+    # ── Kol ──────────────────────────────────────────────
+    if brand == "küçük kalıplı" and fit_type in ("slim-cut", "regular"):
+        regions.append({
+            "region": "kol",
+            "label_tr": "Kol",
+            "status": cap(_REGION_HIGH),
+            "reason_tr": "Küçük kalıplı marka + dar kollu kesim — kol darlığı riski.",
+        })
+    elif fit_type == "slim-cut":
+        regions.append({
+            "region": "kol",
+            "label_tr": "Kol",
+            "status": _REGION_MEDIUM,
+            "reason_tr": "Slim-cut kollar hareket konforunu sınırlayabilir.",
+        })
+    elif fit_type in ("relaxed", "oversize"):
+        regions.append({
+            "region": "kol",
+            "label_tr": "Kol",
+            "status": _REGION_LOW,
+            "reason_tr": "Rahat kesim kollar — hareket konforu yüksek.",
+        })
+    else:
+        regions.append({
+            "region": "kol",
+            "label_tr": "Kol",
+            "status": _REGION_LOW,
+            "reason_tr": "Kol kesimi profile uyumlu.",
+        })
+
+    # ── Bel ──────────────────────────────────────────────
+    thin_fabric = any(k in fabric for k in ("ince", "kaygan", "saten"))
+    if thin_fabric and bmi > 25:
+        regions.append({
+            "region": "bel",
+            "label_tr": "Bel",
+            "status": cap(_REGION_HIGH),
+            "reason_tr": "İnce kumaş + yüksek BMI — bel hattı daha belirgin görünebilir.",
+        })
+    elif fit_type == "slim-cut" and bmi > 24:
+        regions.append({
+            "region": "bel",
+            "label_tr": "Bel",
+            "status": _REGION_MEDIUM,
+            "reason_tr": "Slim-cut + BMI birleşimi — bel rahatlığı düşebilir.",
+        })
+    elif fit_type in ("relaxed", "oversize"):
+        regions.append({
+            "region": "bel",
+            "label_tr": "Bel",
+            "status": _REGION_LOW,
+            "reason_tr": "Bol kesim bel hattına basınç yapmaz.",
+        })
+    else:
+        regions.append({
+            "region": "bel",
+            "label_tr": "Bel",
+            "status": _REGION_LOW,
+            "reason_tr": "Bel alanında belirgin bir risk yok.",
+        })
+
+    return regions
+
+
 def turkish_formatter_node(state: PipelineState) -> dict:
     rec  = state.get("recommendation")   or {}
     risk = state.get("risk_evaluation")  or {}
@@ -392,6 +521,14 @@ def turkish_formatter_node(state: PipelineState) -> dict:
     if not community_tr:
         community_tr = ["Henüz yeterli kullanıcı yorumu bulunmuyor."]
 
+    heatmap = _compute_risk_heatmap(
+        body=state.get("body_analysis") or {},
+        garment=state.get("garment_analysis") or {},
+        has_body_image=bool(state.get("body_image_ref")),
+        height_cm=int(state.get("height_cm") or 170),
+        weight_kg=int(state.get("weight_kg") or 65),
+    )
+
     final_response = {
         "recommended_size": size,
         "confidence_score": confidence,
@@ -403,6 +540,7 @@ def turkish_formatter_node(state: PipelineState) -> dict:
         "risk_factors_tr": risk.get("risk_factors", []),
         "uncertainty_tr": rec.get("uncertainty_tr", ""),
         "community_insights_tr": community_tr,
+        "risk_heatmap": heatmap,
     }
     return {"final_response": final_response}
 

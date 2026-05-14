@@ -27,15 +27,34 @@ const RISK_LABEL: Record<string, string> = {
   high: "Yüksek Risk",
 };
 
+interface MeProfile {
+  height_cm: number;
+  weight_kg: number;
+  fit_preference: string;
+}
+
 export default function HomePage() {
   const [items, setItems] = useState<HistoryItem[] | null>(null);
   const [hasProfile, setHasProfile] = useState<boolean>(false);
+  const [profile, setProfile] = useState<MeProfile | null>(null);
 
   useEffect(() => {
     // Authenticated by middleware; probe /profile/me to learn if onboarding
     // is needed, then fetch the latest 4 analyses if a profile exists.
     apiFetch("/api/v1/profile/me")
-      .then((r) => setHasProfile(r.ok))
+      .then(async (r) => {
+        if (!r.ok) {
+          setHasProfile(false);
+          return;
+        }
+        setHasProfile(true);
+        const data = await r.json();
+        setProfile({
+          height_cm: data.height_cm,
+          weight_kg: data.weight_kg,
+          fit_preference: data.fit_preference,
+        });
+      })
       .catch(() => setHasProfile(false));
 
     apiFetch("/api/v1/history")
@@ -86,7 +105,7 @@ export default function HomePage() {
         </motion.div>
 
         <div className="relative">
-          <MannequinHero />
+          <MannequinHero profile={profile ?? undefined} />
         </div>
       </section>
 

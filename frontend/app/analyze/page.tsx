@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Upload, MessageSquare, ArrowRight, RefreshCw, AlertTriangle, ShieldCheck } from "lucide-react";
 import { AnalysisProgress } from "@/components/analysis-progress";
 import { AgentPipeline } from "@/components/dashboard/agent-pipeline";
+import { BodyHeatmap, type HeatmapRegion } from "@/components/dashboard/body-heatmap";
 import { apiFetch } from "@/lib/api";
 
 type Phase =
@@ -31,6 +32,7 @@ interface AnalysisResult {
   risk_level_tr: string | null;
   risk_factors_tr: string[] | null;
   community_insights_tr: string[] | null;
+  risk_heatmap: HeatmapRegion[] | null;
 }
 
 function phaseToStep(phase: Phase): number {
@@ -335,7 +337,7 @@ export default function AnalyzePage() {
     const {
       recommended_size, confidence_score, confidence_pct, explanation_tr,
       detailed_explanation_tr, uncertainty_tr, risk_level, risk_level_tr,
-      risk_factors_tr, community_insights_tr,
+      risk_factors_tr, community_insights_tr, risk_heatmap,
     } = result;
 
     const safeRiskFactors = risk_factors_tr ?? [];
@@ -482,6 +484,10 @@ export default function AnalyzePage() {
           </div>
         </div>
         </div>
+
+        {risk_heatmap && risk_heatmap.length > 0 && (
+          <BodyHeatmap regions={risk_heatmap} />
+        )}
       </motion.div>
     );
   }
