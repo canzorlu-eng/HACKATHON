@@ -72,7 +72,11 @@ def check_chroma() -> None:
 
         s = get_settings()
         print(f"  host={s.chroma_host}:{s.chroma_port}")
-        client = chromadb.HttpClient(host=s.chroma_host, port=s.chroma_port)
+        client = chromadb.HttpClient(
+            host=s.chroma_host,
+            port=s.chroma_port,
+            settings=chromadb.config.Settings(anonymized_telemetry=False),
+        )
         client.heartbeat()
         print("  [OK] Connection established")
 

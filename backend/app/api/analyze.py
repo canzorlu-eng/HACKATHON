@@ -15,7 +15,9 @@ from app.models.analysis import Analysis
 from app.repositories.analyses import AnalysisRepository
 from app.repositories.users import UserRepository
 from app.schemas.profile import GarmentUploadResponse
-from app.services.image_store import ImageValidationError, validate_and_store
+from app.services.image_store import ImageValidationError, delete_image, validate_and_store
+
+_MAX_HISTORY_PER_USER = 5
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -125,6 +127,29 @@ async def start_analysis(
         logger.exception("pipeline_failed analysis_id=%s", analysis.id)
         session.rollback()
         # Return partial response (image stored, AI result absent) rather than 500
+
+    # ---- Prune to the user's most recent N analyses ----
+    # The user wants the history capped at _MAX_HISTORY_PER_USER; whenever a
+    # new one comes in, anything older than the last N is removed (record +
+    # garment image on disk).
+    try:
+        overflow = analysis_repo.get_overflow(uid, keep=_MAX_HISTORY_PER_USER)
+        for old in overflow:
+            if old.garment_image_ref:
+                delete_image(
+                    old.garment_image_ref,
+                    storage_dir=settings.image_storage_dir,
+                )
+            analysis_repo.delete(old)
+        if overflow:
+            logger.info(
+                "history_pruned user_id=%s removed=%d keep=%d",
+                uid, len(overflow), _MAX_HISTORY_PER_USER,
+            )
+    except Exception:
+        # Pruning is best-effort — never block the user's primary response on it.
+        logger.exception("history_prune_failed user_id=%s", uid)
+        session.rollback()
 
     message = (
         "Görsel doğrulandı ve analiz tamamlandı."

@@ -26,3 +26,21 @@ class AnalysisRepository:
             .limit(limit)
         )
         return list(self._session.exec(stmt).all())
+
+    def get_overflow(self, user_id: UUID, keep: int) -> list[Analysis]:
+        """Return analyses beyond the most recent `keep` for this user.
+
+        Used by analyze.py to prune the user's history down to the latest N
+        records whenever a new analysis is created.
+        """
+        stmt = (
+            select(Analysis)
+            .where(Analysis.user_id == user_id)
+            .order_by(Analysis.created_at.desc())
+            .offset(keep)
+        )
+        return list(self._session.exec(stmt).all())
+
+    def delete(self, analysis: Analysis) -> None:
+        self._session.delete(analysis)
+        self._session.commit()

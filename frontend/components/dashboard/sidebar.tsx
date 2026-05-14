@@ -5,12 +5,63 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Sparkles, History, User2, Wand2, Home } from "lucide-react";
 
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+
 const items = [
   { href: "/", label: "Ana Sayfa", icon: Home },
   { href: "/analyze", label: "Analiz", icon: Wand2 },
   { href: "/history", label: "Geçmiş", icon: History },
   { href: "/onboarding", label: "Profilim", icon: User2 },
 ];
+
+function ModeBadge() {
+  const [demoMode, setDemoMode] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/v1/health`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && typeof data.demo_mode === "boolean") {
+          setDemoMode(data.demo_mode);
+        } else {
+          setDemoMode(false);
+        }
+      })
+      .catch(() => setDemoMode(false));
+  }, []);
+
+  // Until we know, render nothing — don't lie either way.
+  if (demoMode === null) return null;
+
+  if (demoMode) {
+    return (
+      <div className="mb-3 rounded-card border border-border bg-panel-elev p-4">
+        <div className="flex items-center gap-2 text-xs font-medium text-brand">
+          <Sparkles size={14} />
+          DEMO Modu
+        </div>
+        <p className="mt-2 text-xs leading-relaxed text-subtle-foreground">
+          Yerel kurulumda örnek veriyle çalışıyor — Gemini API anahtarı
+          gerekmez.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-3 rounded-card border border-brand/30 bg-brand-soft p-4">
+      <div className="flex items-center gap-2 text-xs font-medium text-brand">
+        <Sparkles size={14} />
+        Canlı AI
+      </div>
+      <p className="mt-2 text-xs leading-relaxed text-subtle-foreground">
+        Gemini multimodal analiz ve ChromaDB üzerinde gerçek topluluk
+        yorumları ile çalışıyor.
+      </p>
+    </div>
+  );
+}
 
 function ProfileChip() {
   const pathname = usePathname();
@@ -140,17 +191,8 @@ export function Sidebar() {
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Mode badge */}
-      <div className="mb-3 rounded-card border border-border bg-panel-elev p-4">
-        <div className="flex items-center gap-2 text-xs font-medium text-brand">
-          <Sparkles size={14} />
-          DEMO Modu
-        </div>
-        <p className="mt-2 text-xs leading-relaxed text-subtle-foreground">
-          Yerel kurulumda örnek veriyle çalışıyor — Gemini API anahtarı
-          gerekmez.
-        </p>
-      </div>
+      {/* Mode badge (DEMO / Canlı AI, driven by /api/v1/health) */}
+      <ModeBadge />
 
       {/* Profile chip */}
       <ProfileChip />

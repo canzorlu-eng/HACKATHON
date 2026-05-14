@@ -139,17 +139,26 @@ class ReviewIntelligenceService:
         ChromaDB collection to query.  Default: ``reviews_v1``.
     """
 
-    def __init__(self, chroma_client: Any, collection_name: str = "reviews_v1") -> None:
-        self._client          = chroma_client
-        self._collection_name = collection_name
-        self._col             = None   # lazy-loaded
+    def __init__(
+        self,
+        chroma_client: Any,
+        collection_name: str = "reviews_v1",
+        embedding_function: Any = None,
+    ) -> None:
+        self._client             = chroma_client
+        self._collection_name    = collection_name
+        self._embedding_function = embedding_function
+        self._col                = None   # lazy-loaded
 
     def _collection(self):
         if self._col is None:
-            self._col = self._client.get_or_create_collection(
-                name=self._collection_name,
-                metadata={"hnsw:space": "cosine"},
-            )
+            kwargs = {
+                "name": self._collection_name,
+                "metadata": {"hnsw:space": "cosine"},
+            }
+            if self._embedding_function is not None:
+                kwargs["embedding_function"] = self._embedding_function
+            self._col = self._client.get_or_create_collection(**kwargs)
         return self._col
 
     # ------------------------------------------------------------------
@@ -369,13 +378,38 @@ def get_review_service() -> ReviewIntelligenceService | None:
 
     try:
         import chromadb
+        from app.ai.embeddings import (
+            GeminiEmbeddingFunction,
+            collection_name_for,
+        )
 
         client = chromadb.HttpClient(
             host=s.chroma_host,
             port=int(s.chroma_port),
+            settings=chromadb.config.Settings(anonymized_telemetry=False),
         )
         client.heartbeat()   # fast fail if server is down
-        return ReviewIntelligenceService(client)
+
+        # If EMBEDDING_MODEL is set, route queries to Gemini's embedding API
+        # and target the gemini-specific collection. Otherwise stay on the
+        # default MiniLM-backed `reviews_v1` collection.
+        embedding_fn = None
+        if s.embedding_model and s.gemini_api_key:
+            embedding_fn = GeminiEmbeddingFunction(
+                api_key=s.gemini_api_key,
+                model=s.embedding_model,
+                task_type="retrieval_query",
+            )
+            logger.info(
+                "review_service using Gemini embeddings model=%s",
+                s.embedding_model,
+            )
+
+        return ReviewIntelligenceService(
+            client,
+            collection_name=collection_name_for(s.embedding_model),
+            embedding_function=embedding_fn,
+        )
     except Exception as exc:
         logger.debug("review_service unavailable: %s", type(exc).__name__)
         return None

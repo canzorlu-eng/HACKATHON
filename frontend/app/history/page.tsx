@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { AnimatePresence } from "framer-motion";
 import { ArrowRight, RefreshCw } from "lucide-react";
 import { HistoryCard, type HistoryItem } from "@/components/history-card";
 
@@ -51,6 +52,36 @@ export default function HistoryPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handleDelete(analysisId: string) {
+    const userId =
+      typeof window !== "undefined"
+        ? localStorage.getItem("hiwaloy_user_id")
+        : null;
+    if (!userId) return;
+
+    // Optimistic update — remove the row from the visible list first.
+    setStatus((prev) => {
+      if (prev.type !== "ready") return prev;
+      const next = prev.items.filter((it) => it.analysis_id !== analysisId);
+      return next.length === 0
+        ? { type: "empty" }
+        : { type: "ready", items: next, total: next.length };
+    });
+
+    try {
+      const res = await fetch(
+        `${BASE}/api/v1/history/${userId}/${analysisId}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok && res.status !== 204) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+    } catch {
+      // Re-sync from server on failure so the UI doesn't lie.
+      load();
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6 pt-2">
@@ -125,12 +156,19 @@ export default function HistoryPage() {
       {status.type === "ready" && (
         <>
           <p className="text-sm text-subtle-foreground">
-            Toplam {status.total} analiz
+            Toplam {status.total} analiz · en fazla 5 kayıt tutulur
           </p>
           <div className="flex flex-col gap-3">
-            {status.items.map((item, index) => (
-              <HistoryCard key={item.analysis_id} item={item} index={index} />
-            ))}
+            <AnimatePresence initial={false}>
+              {status.items.map((item, index) => (
+                <HistoryCard
+                  key={item.analysis_id}
+                  item={item}
+                  index={index}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </AnimatePresence>
           </div>
         </>
       )}

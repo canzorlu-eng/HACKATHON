@@ -10,9 +10,15 @@ class HealthResponse(BaseModel):
     status: str
     app_env: str
     version: str
+    demo_mode: bool
 
 
 @router.get("/health", response_model=HealthResponse, tags=["infra"])
 def health() -> HealthResponse:
     settings = get_settings()
-    return HealthResponse(status="ok", app_env=settings.app_env, version="0.1.0")
+    return HealthResponse(
+        status="ok",
+        app_env=settings.app_env,
+        version="0.1.0",
+        demo_mode=settings.demo_mode,
+    )

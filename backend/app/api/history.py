@@ -4,12 +4,15 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlmodel import Session
 
+from app.config import get_settings
 from app.db import get_session
 from app.repositories.analyses import AnalysisRepository
 from app.repositories.users import UserRepository
 from app.schemas.history import AnalysisDetailResponse, HistoryItem, HistoryListResponse
+from app.services.image_store import delete_image
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -73,3 +76,32 @@ def get_analysis(
         formatted_response=analysis.formatted_response,
         created_at=analysis.created_at,
     )
+
+
+@router.delete("/history/{user_id}/{analysis_id}", status_code=204)
+def delete_analysis(
+    user_id: UUID,
+    analysis_id: UUID,
+    session: Session = Depends(get_session),
+) -> Response:
+    """
+    UC-08: Delete a single analysis record (and its garment image on disk).
+    """
+    user_repo = UserRepository(session)
+    if user_repo.get_by_id(user_id) is None:
+        raise HTTPException(404, detail="Kullanıcı profili bulunamadı.")
+
+    analysis_repo = AnalysisRepository(session)
+    analysis = analysis_repo.get_by_id(analysis_id)
+    if analysis is None or analysis.user_id != user_id:
+        raise HTTPException(404, detail="Analiz kaydı bulunamadı.")
+
+    settings = get_settings()
+    if analysis.garment_image_ref:
+        delete_image(
+            analysis.garment_image_ref,
+            storage_dir=settings.image_storage_dir,
+        )
+    analysis_repo.delete(analysis)
+    logger.info("analysis_deleted analysis_id=%s user_id=%s", analysis_id, user_id)
+    return Response(status_code=204)

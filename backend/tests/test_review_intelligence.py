@@ -360,9 +360,17 @@ async def test_review_retriever_node_uses_service_ok(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_review_retriever_node_brand_fallback_inserts_warning():
+async def test_review_retriever_node_brand_fallback_inserts_warning(monkeypatch):
     """Small-brand fallback must prepend a beden büyük warning insight."""
     from app.ai.nodes import review_retriever_node
+
+    # Force the service unavailable — otherwise a host-side ChromaDB
+    # running for live work would let this test connect for real and the
+    # node would return status="ok" instead of "fallback".
+    monkeypatch.setattr(
+        "app.services.review_service.get_review_service",
+        lambda: None,
+    )
 
     state = {
         "garment_analysis": {
@@ -372,7 +380,6 @@ async def test_review_retriever_node_brand_fallback_inserts_warning():
         }
     }
 
-    # No real ChromaDB — get_review_service returns None
     result = review_retriever_node(state)
     assert result["review_retrieval_status"] == "fallback"
     themes = [ins.get("theme", "") for ins in result["review_insights"]]

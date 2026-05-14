@@ -181,6 +181,25 @@ def recommendation_generator_node(state: PipelineState) -> dict:
     body    = state.get("body_analysis")    or {}
     garment = state.get("garment_analysis") or {}
 
+    # Gate: if the garment analyzer reports the image isn't a garment, bail out
+    # honestly instead of fabricating a size + risk + insights.
+    if garment.get("is_garment") is False:
+        logger.info("recommendation skipped — image is not a garment")
+        return {
+            "recommendation": {
+                "recommended_size": None,
+                "confidence": 0.0,
+                "explanation_tr": (
+                    "Yüklenen görselde tanınabilir bir kıyafet bulunamadı. "
+                    "Lütfen kıyafet fotoğrafı yükleyin."
+                ),
+                "uncertainty_tr": garment.get(
+                    "uncertainty_reason", "Görsel bir kıyafet içermiyor."
+                ),
+                "garment_invalid": True,
+            }
+        }
+
     height_cm   = state.get("height_cm", 170)
     weight_kg   = state.get("weight_kg", 65)
     user_pref   = state.get("fit_preference", "regular")
@@ -192,6 +211,16 @@ def recommendation_generator_node(state: PipelineState) -> dict:
     fit_tendency = body.get("fit_tendency", "standart")
     fit_type     = garment.get("fit_type", "regular")
     brand        = garment.get("brand_sizing_tendency", "standart")
+
+    # Map Gemini's English fit_type tokens to Turkish adjective form.
+    _FIT_TYPE_TR = {
+        "slim-cut": "dar",
+        "slim":     "dar",
+        "regular":  "normal",
+        "relaxed":  "rahat",
+        "oversize": "oversize",
+    }
+    fit_type_tr = _FIT_TYPE_TR.get(fit_type, "normal")
 
     delta  = _TENDENCY_DELTA.get(fit_tendency, 0)
     delta += _FIT_TYPE_DELTA.get(fit_type, 0) - _USER_PREF_DELTA.get(user_pref, 0)
@@ -217,7 +246,7 @@ def recommendation_generator_node(state: PipelineState) -> dict:
         brand_note = " Marka büyük kalıplı olduğundan bir beden küçük alınması önerildi."
 
     explanation = (
-        f"Beden ölçüleriniz ve kıyafetin {fit_type} kesimine göre "
+        f"Beden ölçüleriniz ve kıyafetin {fit_type_tr} kesimine göre "
         f"{recommended} beden önerilmektedir.{brand_note}"
     )
 
@@ -249,6 +278,18 @@ def risk_evaluator_node(state: PipelineState) -> dict:
     rec     = state.get("recommendation")    or {}
     garment = state.get("garment_analysis")  or {}
     reviews = state.get("review_insights")   or []
+
+    # Garment-invalid path: no risk to evaluate.
+    if rec.get("garment_invalid"):
+        return {
+            "risk_evaluation": {
+                "risk_level": None,
+                "risk_level_tr": None,
+                "risk_factors": [],
+                "risk_score": 0.0,
+                "confidence": 0.0,
+            }
+        }
 
     confidence = float(rec.get("confidence", 0.5))
     risk_factors: list[str] = []
@@ -303,6 +344,22 @@ def turkish_formatter_node(state: PipelineState) -> dict:
     rec  = state.get("recommendation")   or {}
     risk = state.get("risk_evaluation")  or {}
     insights = state.get("review_insights") or []
+
+    # Garment-invalid path: short, honest response — no fabricated fields.
+    if rec.get("garment_invalid"):
+        return {
+            "final_response": {
+                "recommended_size": None,
+                "confidence_score": None,
+                "confidence_pct": None,
+                "explanation_tr": rec.get("explanation_tr", ""),
+                "risk_level": None,
+                "risk_level_tr": None,
+                "risk_factors_tr": [],
+                "uncertainty_tr": rec.get("uncertainty_tr", ""),
+                "community_insights_tr": [],
+            }
+        }
 
     size       = rec.get("recommended_size", "M")
     confidence = float(rec.get("confidence", 0.5))

@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Trash2, Loader2 } from "lucide-react";
 
 export interface HistoryItem {
   analysis_id: string;
@@ -15,6 +16,7 @@ export interface HistoryItem {
 interface HistoryCardProps {
   item: HistoryItem;
   index: number;
+  onDelete?: (analysisId: string) => Promise<void> | void;
 }
 
 const riskConfig: Record<
@@ -35,7 +37,9 @@ const riskConfig: Record<
   },
 };
 
-export function HistoryCard({ item, index }: HistoryCardProps) {
+export function HistoryCard({ item, index, onDelete }: HistoryCardProps) {
+  const [deleting, setDeleting] = useState(false);
+
   const formattedDate = new Date(item.created_at).toLocaleDateString("tr-TR", {
     day: "numeric",
     month: "long",
@@ -44,33 +48,44 @@ export function HistoryCard({ item, index }: HistoryCardProps) {
 
   const risk = item.risk_level ? riskConfig[item.risk_level] : null;
 
+  async function handleDelete(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (deleting || !onDelete) return;
+    const ok = window.confirm("Bu analiz kaydını silmek istediğine emin misin?");
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      await onDelete(item.analysis_id);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
-    <Link
-      href={`/history/${item.analysis_id}`}
-      className="block rounded-card focus:outline-none focus:ring-2 ring-brand"
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: 30 }}
+      transition={{ duration: 0.25, delay: index * 0.05, ease: "easeOut" }}
+      className="panel flex items-center gap-4 p-4 transition hover:border-border-strong"
     >
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, delay: index * 0.05, ease: "easeOut" }}
-        className="panel flex items-center gap-4 p-4 transition hover:border-border-strong"
+      {/* Navigable region — wraps everything except the delete button */}
+      <Link
+        href={`/history/${item.analysis_id}`}
+        className="flex min-w-0 flex-1 items-center gap-4 rounded-md focus:outline-none focus:ring-2 ring-brand"
       >
-        {/* Size circle */}
         <div className="grid h-12 w-12 shrink-0 select-none place-items-center rounded-card bg-brand-soft text-lg font-bold text-brand">
           {item.recommended_size ?? "—"}
         </div>
 
-        {/* Info */}
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <p className="truncate text-sm font-medium text-foreground">
             Analiz {item.analysis_id.slice(0, 8)}
           </p>
-          <span className="text-xs text-subtle-foreground">
-            {formattedDate}
-          </span>
+          <span className="text-xs text-subtle-foreground">{formattedDate}</span>
         </div>
 
-        {/* Risk pill */}
         {risk ? (
           <span
             className={`inline-flex w-fit items-center rounded-pill border px-2.5 py-0.5 text-xs font-medium ${risk.className}`}
@@ -82,7 +97,22 @@ export function HistoryCard({ item, index }: HistoryCardProps) {
         )}
 
         <ArrowUpRight size={14} className="text-subtle-foreground" />
-      </motion.div>
-    </Link>
+      </Link>
+
+      {/* Delete button — outside the Link so it doesn't navigate. */}
+      <button
+        type="button"
+        onClick={handleDelete}
+        disabled={deleting}
+        aria-label="Analizi sil"
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border bg-panel-elev text-subtle-foreground transition hover:border-danger/40 hover:bg-danger/10 hover:text-danger disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {deleting ? (
+          <Loader2 size={14} className="animate-spin" />
+        ) : (
+          <Trash2 size={14} />
+        )}
+      </button>
+    </motion.div>
   );
 }

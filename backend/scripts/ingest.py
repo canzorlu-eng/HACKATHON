@@ -13,6 +13,18 @@ import json
 import sys
 from pathlib import Path
 
+# Load the project-root .env BEFORE app.config is imported, so EMBEDDING_MODEL
+# and GEMINI_API_KEY are visible regardless of the CWD the user ran us from.
+# (Pydantic Settings(env_file=".env") only resolves relative to CWD, which
+# bites when the script is invoked from backend/ or from the project root.)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(_PROJECT_ROOT / ".env", override=False)
+except ImportError:  # python-dotenv missing — fall back to CWD discovery
+    pass
+
 
 def load_reviews(jsonl_path: Path) -> list[dict]:
     reviews = []
@@ -52,18 +64,48 @@ def ingest(
 
     print(f"[INFO] Connecting to ChromaDB at {chroma_host}:{chroma_port}")
     try:
-        client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
+        # anonymized_telemetry=False silences the noisy posthog signature
+        # warning chromadb 0.5.x prints on every client start.
+        client = chromadb.HttpClient(
+            host=chroma_host,
+            port=chroma_port,
+            settings=chromadb.config.Settings(anonymized_telemetry=False),
+        )
         client.heartbeat()
     except Exception as exc:
         print(f"[ERROR] Cannot reach ChromaDB: {exc}", file=sys.stderr)
         print("[HINT] Start ChromaDB via: docker compose up chromadb", file=sys.stderr)
         sys.exit(1)
 
-    col = client.get_or_create_collection(
-        name="reviews_v1",
-        metadata={"description": "HIWALOY customer review insights"},
+    # Pick collection + embedding function based on EMBEDDING_MODEL env var.
+    # Empty → MiniLM default (reviews_v1). Set → Gemini (reviews_gemini_v1).
+    from app.ai.embeddings import (
+        GeminiEmbeddingFunction,
+        collection_name_for,
     )
-    print(f"[INFO] Collection reviews_v1 currently has {col.count()} documents")
+    from app.config import get_settings
+
+    s = get_settings()
+    collection_name = collection_name_for(s.embedding_model)
+    collection_kwargs: dict = {
+        "name": collection_name,
+        "metadata": {"description": "HIWALOY customer review insights"},
+    }
+    if s.embedding_model and s.gemini_api_key:
+        collection_kwargs["embedding_function"] = GeminiEmbeddingFunction(
+            api_key=s.gemini_api_key,
+            model=s.embedding_model,
+            task_type="retrieval_document",
+        )
+        print(
+            f"[INFO] Using Gemini embedding model={s.embedding_model} "
+            f"→ collection {collection_name}"
+        )
+    else:
+        print(f"[INFO] Using ChromaDB default MiniLM embedder → collection {collection_name}")
+
+    col = client.get_or_create_collection(**collection_kwargs)
+    print(f"[INFO] Collection {collection_name} currently has {col.count()} documents")
 
     # Build upsert payload
     ids        = [r["id"]        for r in reviews]
@@ -93,7 +135,7 @@ def ingest(
         print(f"[INFO] Upserted reviews {start+1}–{end}")
 
     final_count = col.count()
-    print(f"[OK] Ingestion complete — reviews_v1 collection now has {final_count} documents")
+    print(f"[OK] Ingestion complete — {collection_name} collection now has {final_count} documents")
 
     # Quick sanity query
     results = col.query(query_texts=["slim fit gömlek küçük kalıplı"], n_results=3)

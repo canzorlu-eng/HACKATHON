@@ -65,6 +65,7 @@ class MockAIClient:
 
     async def analyze_garment(self, image_bytes: Optional[bytes]) -> dict:
         return {
+            "is_garment": True,
             "category": "shirt",
             "fit_type": "regular",
             "cut_notes": "Regular kesim kıyafet.",
@@ -87,34 +88,49 @@ User: height={height_cm}cm, weight={weight_kg}kg, fit_preference={fit_preference
 
 Return ONLY valid JSON with this exact schema — no markdown fences:
 {{
-  "silhouette_type": "string — e.g. ince-uzun, standart, atletik",
+  "silhouette_type": "Turkish string — e.g. ince-uzun, standart, atletik",
   "fit_tendency": "dar taraflı|standart|geniş taraflı",
-  "proportional_notes": "brief neutral description",
+  "proportional_notes": "brief neutral Turkish description",
   "shoulder_width_estimate": "dar|standart|geniş",
   "torso_length_estimate": "kısa|standart|uzun",
   "confidence": 0.0-1.0,
-  "uncertainty_reason": "what limits confidence"
+  "uncertainty_reason": "Turkish one-sentence reason for the confidence value"
 }}
+LANGUAGE: every string value in the JSON MUST be in Turkish. Do not include any English words.
 Be respectful and neutral. Focus on fit characteristics only — no attractiveness judgements."""
 
 _GARMENT_PROMPT = """\
 Analyze this garment image for fit and sizing characteristics.
 
-Return ONLY valid JSON with this exact schema — no markdown fences:
-{{
-  "category": "shirt|jeans|dress|jacket|coat|other",
-  "fit_type": "slim-cut|regular|relaxed|oversize",
-  "cut_notes": "observable cut details",
-  "fabric_cues": "visible weight and texture clues",
-  "brand_sizing_tendency": "küçük kalıplı|standart|büyük kalıplı",
-  "available_sizes": ["XS","S","M","L","XL"],
-  "confidence": 0.0-1.0,
-  "uncertainty_reason": "what limits confidence"
-}}"""
+STEP 1 — gate check (do this FIRST):
+  Is this image actually a wearable garment / clothing item (shirt, jeans,
+  dress, jacket, coat, sweater, hoodie, skirt, trousers, etc.)?
+  If NO — i.e. the image is a screenshot, document, exam question, food,
+  scenery, an unrelated object, or a person with no clothing focus —
+  return ONLY this JSON and stop:
+    {{"is_garment": false, "confidence": 0.0,
+      "uncertainty_reason": "Görsel bir kıyafet içermiyor."}}
+  Do NOT invent garment details for a non-garment image.
+
+STEP 2 — full analysis (only if is_garment is true):
+  Return ONLY valid JSON with this exact schema — no markdown fences:
+  {{
+    "is_garment": true,
+    "category": "shirt|jeans|dress|jacket|coat|other",
+    "fit_type": "slim-cut|regular|relaxed|oversize",
+    "cut_notes": "Turkish observable cut details",
+    "fabric_cues": "Turkish visible weight and texture clues",
+    "brand_sizing_tendency": "küçük kalıplı|standart|büyük kalıplı",
+    "available_sizes": ["XS","S","M","L","XL"],
+    "confidence": 0.0-1.0,
+    "uncertainty_reason": "Turkish one-sentence reason for the confidence value"
+  }}
+LANGUAGE: every prose string value (cut_notes, fabric_cues, uncertainty_reason) MUST be in Turkish.
+Keep `category` and `fit_type` as the English tokens above — they are enum keys, not user-facing text."""
 
 
 class RealGeminiClient:
-    def __init__(self, api_key: str, model: str = "gemini-1.5-flash") -> None:
+    def __init__(self, api_key: str, model: str = "gemini-3.1-flash-lite") -> None:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
         self._model_name = model
@@ -202,7 +218,7 @@ def get_ai_client() -> AIClient:
         logger.info("DEMO_MODE=true — using MockAIClient (deterministic demo)")
         return MockAIClient()
     if s.gemini_api_key:
-        model = s.gemini_model or "gemini-1.5-flash"
+        model = s.gemini_model or "gemini-3.1-flash-lite"
         return RealGeminiClient(s.gemini_api_key, model)
     logger.warning("GEMINI_API_KEY not set — using MockAIClient")
     return MockAIClient()
