@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { DashboardShell } from "@/components/dashboard/shell";
+import { Providers } from "./providers";
+import { LayoutShell } from "@/components/dashboard/layout-shell";
 
 export const metadata: Metadata = {
   title: "HIWALOY — Üzerinizde Nasıl Duracağını Görün",
@@ -12,7 +13,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="tr" suppressHydrationWarning>
       <body>
-        <DashboardShell>{children}</DashboardShell>
+        <Providers>
+          <LayoutShell>{children}</LayoutShell>
+        </Providers>
       </body>
     </html>
   );

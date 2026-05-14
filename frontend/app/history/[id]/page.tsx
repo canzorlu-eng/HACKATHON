@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { MessageSquare, ArrowLeft, AlertTriangle, ShieldCheck } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 interface FormattedResponse {
   recommended_size?: string | null;
@@ -24,8 +25,6 @@ interface AnalysisDetail {
   formatted_response: FormattedResponse | null;
   created_at: string;
 }
-
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 const RISK_PILL: Record<string, string> = {
   low: "text-success bg-success/10 border-success/30",
@@ -49,18 +48,10 @@ export default function HistoryDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const userId = localStorage.getItem("hiwaloy_user_id");
-    if (!userId) {
-      router.replace("/onboarding");
-      return;
-    }
-
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    fetch(`${BASE}/api/v1/history/${userId}/${analysisId}`, {
-      signal: controller.signal,
-    })
+    apiFetch(`/api/v1/history/${analysisId}`, { signal: controller.signal })
       .then((res) => {
         clearTimeout(timeoutId);
         if (res.status === 404) throw new Error("not_found");

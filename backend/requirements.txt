@@ -13,6 +13,9 @@ psycopg2-binary==2.9.10
 # Image validation
 Pillow==11.1.0
 
+# Auth (HS256 JWT shared with NextAuth)
+python-jose[cryptography]==3.3.0
+
 # AI pipeline
 langgraph>=0.2.60,<0.4.0
 langchain-core>=0.3.0,<0.4.0

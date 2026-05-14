@@ -12,6 +12,7 @@ import {
   ImageIcon,
   ImageOff,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 type FitPreference = "slim" | "regular" | "relaxed" | "oversize";
 
@@ -28,8 +29,6 @@ const FIT_LABEL: Record<FitPreference, string> = {
   relaxed: "Rahat Kesim",
   oversize: "Oversize",
 };
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 interface SavedProfile {
   height: number;
@@ -59,56 +58,28 @@ export default function OnboardingPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ---------- Load saved profile on mount ----------
+  // Fetch existing profile (if any) on mount — auth-scoped.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const userId = localStorage.getItem("hiwaloy_user_id");
-    if (!userId) {
-      setView("form");
-      return;
-    }
-
-    const lsHeight = Number(localStorage.getItem("hiwaloy_height_cm"));
-    const lsWeight = Number(localStorage.getItem("hiwaloy_weight_kg"));
-    const lsFit = (localStorage.getItem("hiwaloy_fit_preference") ||
-      "regular") as FitPreference;
-
-    // Fetch from API for the authoritative has_body_image flag (and as a
-    // freshness check). If the API can't find the user, fall back to form.
-    fetch(`${API_BASE}/api/v1/profile/${userId}`)
-      .then((r) => (r.ok ? r.json() : null))
+    apiFetch("/api/v1/profile/me")
+      .then((r) => {
+        if (r.status === 404) return null;
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         if (!data) {
-          // Stale user_id — clear it and show the form
-          localStorage.removeItem("hiwaloy_user_id");
-          localStorage.removeItem("hiwaloy_height_cm");
-          localStorage.removeItem("hiwaloy_weight_kg");
-          localStorage.removeItem("hiwaloy_fit_preference");
           setView("form");
           return;
         }
         setSaved({
-          height: data.height_cm ?? lsHeight,
-          weight: data.weight_kg ?? lsWeight,
-          fit: (data.fit_preference ?? lsFit) as FitPreference,
+          height: data.height_cm,
+          weight: data.weight_kg,
+          fit: data.fit_preference as FitPreference,
           hasBodyImage: Boolean(data.has_body_image),
         });
         setView("summary");
       })
-      .catch(() => {
-        // Network error — render from localStorage so the page is still useful
-        if (lsHeight && lsWeight) {
-          setSaved({
-            height: lsHeight,
-            weight: lsWeight,
-            fit: lsFit,
-            hasBodyImage: false,
-          });
-          setView("summary");
-        } else {
-          setView("form");
-        }
-      });
+      .catch(() => setView("form"));
   }, []);
 
   function validate(): boolean {
@@ -133,9 +104,6 @@ export default function OnboardingPage() {
     if (!validate()) return;
 
     setIsSubmitting(true);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
     try {
       const fd = new FormData();
       fd.append("height_cm", String(heightCm));
@@ -143,12 +111,7 @@ export default function OnboardingPage() {
       fd.append("fit_preference", fitPreference);
       if (bodyImage) fd.append("body_image", bodyImage);
 
-      const res = await fetch(`${API_BASE}/api/v1/profile`, {
-        method: "POST",
-        body: fd,
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+      const res = await apiFetch("/api/v1/profile", { method: "POST", body: fd });
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -156,21 +119,8 @@ export default function OnboardingPage() {
         throw new Error(detail ?? `HTTP ${res.status}`);
       }
 
-      const data = await res.json();
-      const userId: string = data.user_id ?? data.id ?? "";
-      if (!userId) {
-        setApiError("Profil oluşturulamadı. Lütfen tekrar deneyin.");
-        return;
-      }
-
-      localStorage.setItem("hiwaloy_user_id", userId);
-      localStorage.setItem("hiwaloy_height_cm", String(heightCm));
-      localStorage.setItem("hiwaloy_weight_kg", String(weightKg));
-      localStorage.setItem("hiwaloy_fit_preference", fitPreference);
-      // Notify the sidebar (same tab) so the profile chip refreshes immediately.
       window.dispatchEvent(new Event("hiwaloy:profile-changed"));
-
-      setSuccessMessage("Profiliniz oluşturuldu! Yönlendiriliyor…");
+      setSuccessMessage("Profilin kaydedildi! Yönlendiriliyor…");
       setSaved({
         height: Number(heightCm),
         weight: Number(weightKg),
@@ -179,16 +129,8 @@ export default function OnboardingPage() {
       });
       setTimeout(() => router.push("/analyze"), 800);
     } catch (err) {
-      clearTimeout(timeoutId);
-      const isAbort = err instanceof Error && err.name === "AbortError";
       setApiError(
-        isAbort
-          ? "Bağlantı zaman aşımına uğradı. Lütfen tekrar deneyin."
-          : err instanceof Error &&
-            err.message &&
-            !err.message.startsWith("HTTP")
-          ? err.message
-          : "Bir hata oluştu. Lütfen tekrar deneyin."
+        err instanceof Error && err.message ? err.message : "Bir hata oluştu."
       );
     } finally {
       setIsSubmitting(false);
@@ -200,7 +142,6 @@ export default function OnboardingPage() {
   }
 
   function openEditor() {
-    // Pre-fill the form with current values so the user can adjust them.
     if (saved) {
       setHeightCm(String(saved.height));
       setWeightKg(String(saved.weight));
@@ -208,8 +149,6 @@ export default function OnboardingPage() {
     }
     setView("form");
   }
-
-  // ---------- Render ----------
 
   if (view === "loading") {
     return (
@@ -352,7 +291,7 @@ export default function OnboardingPage() {
                 disabled={isSubmitting}
                 className="inline-flex items-center justify-center gap-2 rounded-pill bg-brand-gradient px-5 py-3 text-sm font-semibold text-white brand-glow transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isSubmitting ? "Oluşturuluyor…" : "Profili Kaydet"}
+                {isSubmitting ? "Kaydediliyor…" : "Profili Kaydet"}
                 <ArrowRight size={14} />
               </button>
               {saved && (
@@ -365,20 +304,12 @@ export default function OnboardingPage() {
                 </button>
               )}
             </div>
-            {saved && (
-              <p className="text-xs text-subtle-foreground">
-                Profili güncellersen yeni bir profil kaydı oluşturulur; önceki analizlerin
-                geçmişten erişilemeyebilir.
-              </p>
-            )}
           </div>
         </form>
       )}
     </motion.div>
   );
 }
-
-// ----- subcomponents -----
 
 function SummaryView({
   profile,

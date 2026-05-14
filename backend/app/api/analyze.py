@@ -2,18 +2,18 @@
 
 import asyncio
 import logging
-from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlmodel import Session
 
 from app.ai.client import AIClient, get_ai_client
 from app.ai.graph import build_pipeline
+from app.api.auth import get_current_user
 from app.config import get_settings
 from app.db import get_session
 from app.models.analysis import Analysis
+from app.models.user import User
 from app.repositories.analyses import AnalysisRepository
-from app.repositories.users import UserRepository
 from app.schemas.profile import GarmentUploadResponse
 from app.services.image_store import ImageValidationError, delete_image, validate_and_store
 
@@ -25,24 +25,24 @@ router = APIRouter()
 
 @router.post("/analyze", response_model=GarmentUploadResponse, status_code=202)
 async def start_analysis(
-    user_id: str = Form(...),
     garment_image: UploadFile = File(...),
     session: Session = Depends(get_session),
     ai_client: AIClient = Depends(get_ai_client),
+    current_user: User = Depends(get_current_user),
 ) -> GarmentUploadResponse:
     """
     UC-02: Upload garment image and run the full fit analysis pipeline.
-    Returns 202 Accepted with the complete Turkish AI recommendation.
+    Authenticated; user is derived from the Bearer token.
     """
-    try:
-        uid = UUID(user_id)
-    except ValueError:
-        raise HTTPException(422, detail="Geçersiz kullanıcı kimliği formatı.")
-
-    user_repo = UserRepository(session)
-    user = user_repo.get_by_id(uid)
-    if user is None:
-        raise HTTPException(404, detail="Kullanıcı profili bulunamadı.")
+    if (
+        current_user.height_cm is None
+        or current_user.weight_kg is None
+        or current_user.fit_preference is None
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Profilinizi tamamlayın: boy, kilo ve tercih edilen kesim gerekli.",
+        )
 
     settings = get_settings()
     try:
@@ -55,14 +55,14 @@ async def start_analysis(
     except ImageValidationError as exc:
         raise HTTPException(422, detail=str(exc)) from exc
 
-    analysis = Analysis(user_id=uid, garment_image_ref=garment_ref)
+    analysis = Analysis(user_id=current_user.id, garment_image_ref=garment_ref)
     analysis_repo = AnalysisRepository(session)
     analysis = analysis_repo.create(analysis)
 
     logger.info(
         "analysis_created analysis_id=%s user_id=%s garment_ref=%s",
         analysis.id,
-        uid,
+        current_user.id,
         garment_ref,
     )
 
@@ -70,14 +70,13 @@ async def start_analysis(
     pipeline = build_pipeline(ai_client)
     initial_state = {
         "analysis_id":     str(analysis.id),
-        "user_id":         str(uid),
-        "height_cm":       user.height_cm,
-        "weight_kg":       user.weight_kg,
-        "fit_preference":  user.fit_preference,
-        "body_image_ref":  user.body_image_ref,
+        "user_id":         str(current_user.id),
+        "height_cm":       current_user.height_cm,
+        "weight_kg":       current_user.weight_kg,
+        "fit_preference":  current_user.fit_preference,
+        "body_image_ref":  current_user.body_image_ref,
         "garment_image_ref": garment_ref,
         "storage_dir":     settings.image_storage_dir,
-        # pipeline result fields — initialised so LangGraph state is complete
         "intent_valid":    False,
         "intent_error":    None,
         "body_analysis":   None,
@@ -89,7 +88,7 @@ async def start_analysis(
         "pipeline_error":  None,
     }
 
-    _PIPELINE_TIMEOUT = 30.0  # seconds
+    _PIPELINE_TIMEOUT = 30.0
 
     final_response_dict = None
     try:
@@ -126,14 +125,10 @@ async def start_analysis(
     except Exception:
         logger.exception("pipeline_failed analysis_id=%s", analysis.id)
         session.rollback()
-        # Return partial response (image stored, AI result absent) rather than 500
 
-    # ---- Prune to the user's most recent N analyses ----
-    # The user wants the history capped at _MAX_HISTORY_PER_USER; whenever a
-    # new one comes in, anything older than the last N is removed (record +
-    # garment image on disk).
+    # Prune to the user's most recent N analyses.
     try:
-        overflow = analysis_repo.get_overflow(uid, keep=_MAX_HISTORY_PER_USER)
+        overflow = analysis_repo.get_overflow(current_user.id, keep=_MAX_HISTORY_PER_USER)
         for old in overflow:
             if old.garment_image_ref:
                 delete_image(
@@ -144,11 +139,10 @@ async def start_analysis(
         if overflow:
             logger.info(
                 "history_pruned user_id=%s removed=%d keep=%d",
-                uid, len(overflow), _MAX_HISTORY_PER_USER,
+                current_user.id, len(overflow), _MAX_HISTORY_PER_USER,
             )
     except Exception:
-        # Pruning is best-effort — never block the user's primary response on it.
-        logger.exception("history_prune_failed user_id=%s", uid)
+        logger.exception("history_prune_failed user_id=%s", current_user.id)
         session.rollback()
 
     message = (

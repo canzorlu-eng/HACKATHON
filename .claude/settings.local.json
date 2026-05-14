@@ -47,7 +47,8 @@
       "Bash(curl -s -X POST http://localhost:8000/api/v1/profile -F height_cm=170 -F weight_kg=65 -F fit_preference=regular -F 'body_image=@/tmp/fake.bmp;type=image/bmp')",
       "Bash(curl -sS -w 'HTTP %{http_code}\\\\n' -X POST http://localhost:8000/api/v1/profile -F height_cm=170 -F weight_kg=65 -F fit_preference=regular -F 'body_image=@/tmp/fake.bmp;type=image/bmp')",
       "PowerShell(docker compose up *)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/api/v1/health)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/api/v1/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/login)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Sparkles, History, User2, Wand2, Home } from "lucide-react";
+import { signOut, useSession } from "next-auth/react";
+import { Sparkles, History, User2, Wand2, Home, LogOut } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
@@ -21,17 +23,12 @@ function ModeBadge() {
   useEffect(() => {
     fetch(`${API_BASE}/api/v1/health`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data && typeof data.demo_mode === "boolean") {
-          setDemoMode(data.demo_mode);
-        } else {
-          setDemoMode(false);
-        }
-      })
+      .then((data) =>
+        setDemoMode(data && typeof data.demo_mode === "boolean" ? data.demo_mode : false),
+      )
       .catch(() => setDemoMode(false));
   }, []);
 
-  // Until we know, render nothing — don't lie either way.
   if (demoMode === null) return null;
 
   if (demoMode) {
@@ -65,54 +62,47 @@ function ModeBadge() {
 
 function ProfileChip() {
   const pathname = usePathname();
+  const { data: session } = useSession();
   const [profile, setProfile] = useState<
     { height?: number; weight?: number; fit?: string } | null
   >(null);
 
+  // Refresh whenever pathname changes (route navigation) OR the onboarding
+  // page fires hiwaloy:profile-changed after a save.
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!session?.user) return;
 
-    function read() {
-      const userId = localStorage.getItem("hiwaloy_user_id");
-      const h = Number(localStorage.getItem("hiwaloy_height_cm"));
-      const w = Number(localStorage.getItem("hiwaloy_weight_kg"));
-      const fit = localStorage.getItem("hiwaloy_fit_preference") ?? undefined;
-      setProfile(
-        userId ? { height: h || undefined, weight: w || undefined, fit } : null
-      );
+    let cancelled = false;
+    async function refresh() {
+      try {
+        const r = await apiFetch("/api/v1/profile/me");
+        if (cancelled) return;
+        if (!r.ok) {
+          setProfile(null);
+          return;
+        }
+        const data = await r.json();
+        setProfile({
+          height: data.height_cm,
+          weight: data.weight_kg,
+          fit: data.fit_preference,
+        });
+      } catch {
+        if (!cancelled) setProfile(null);
+      }
     }
+    refresh();
 
-    read();
-    // Same-tab signal fired by /onboarding after a successful save.
-    window.addEventListener("hiwaloy:profile-changed", read);
-    // Cross-tab signal for free.
-    window.addEventListener("storage", read);
+    window.addEventListener("hiwaloy:profile-changed", refresh);
     return () => {
-      window.removeEventListener("hiwaloy:profile-changed", read);
-      window.removeEventListener("storage", read);
+      cancelled = true;
+      window.removeEventListener("hiwaloy:profile-changed", refresh);
     };
-  }, [pathname]);
+  }, [pathname, session]);
 
-  if (!profile) {
-    return (
-      <Link
-        href="/onboarding"
-        className="flex items-center gap-3 rounded-card border border-border bg-panel-elev px-3 py-2.5 transition hover:border-border-strong"
-      >
-        <span className="grid h-9 w-9 place-items-center rounded-full bg-brand-soft text-brand">
-          <User2 size={16} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-foreground">
-            Profil oluştur
-          </p>
-          <p className="truncate text-xs text-subtle-foreground">
-            Ölçülerini ekle
-          </p>
-        </div>
-      </Link>
-    );
-  }
+  if (!session?.user) return null;
+
+  const displayName = session.user.name || session.user.email || "Hesabım";
 
   return (
     <Link
@@ -124,11 +114,12 @@ function ProfileChip() {
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground">
-          {profile.height ? `${profile.height} cm` : "Profil"}{" "}
-          {profile.weight ? `· ${profile.weight} kg` : ""}
+          {displayName}
         </p>
-        <p className="truncate text-xs text-subtle-foreground capitalize">
-          {profile.fit ?? "—"}
+        <p className="truncate text-xs text-subtle-foreground">
+          {profile
+            ? `${profile.height} cm · ${profile.weight} kg`
+            : "Profil oluştur"}
         </p>
       </div>
     </Link>
@@ -140,7 +131,6 @@ export function Sidebar() {
 
   return (
     <aside className="sticky top-0 hidden h-dvh w-[240px] shrink-0 flex-col border-r border-border bg-panel/60 px-4 py-6 backdrop-blur-xl lg:flex">
-      {/* Brand */}
       <Link href="/" className="mb-8 px-2">
         <p className="text-xl font-semibold tracking-tight text-foreground">
           HIWALOY
@@ -154,7 +144,6 @@ export function Sidebar() {
 
       <div className="mb-2 h-px bg-border" />
 
-      {/* Nav */}
       <nav className="flex flex-col gap-1">
         {items.map((item) => {
           const Icon = item.icon;
@@ -188,14 +177,18 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Mode badge (DEMO / Canlı AI, driven by /api/v1/health) */}
       <ModeBadge />
-
-      {/* Profile chip */}
       <ProfileChip />
+
+      <button
+        type="button"
+        onClick={() => signOut({ callbackUrl: "/login" })}
+        className="mt-2 inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-subtle-foreground transition hover:text-foreground"
+      >
+        <LogOut size={12} /> Çıkış Yap
+      </button>
     </aside>
   );
 }

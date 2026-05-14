@@ -7,17 +7,44 @@ The AI client is replaced with MockAIClient so tests never call Gemini.
 
 import pytest
 from fastapi.testclient import TestClient
+from jose import jwt
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, Session, create_engine
 
 import app.models  # noqa: F401 — registers User + Analysis in SQLModel.metadata
 from app.ai.client import MockAIClient
 
+# Shared test secret — also injected into Settings via monkeypatch so the
+# backend's get_current_user dependency verifies tokens with the same key.
+TEST_JWT_SECRET = "test-secret-please-no-leak"
+TEST_GOOGLE_SUB = "test-google-sub-1"
+TEST_EMAIL = "test@example.com"
+
+
+def make_auth_header(
+    sub: str = TEST_GOOGLE_SUB,
+    email: str = TEST_EMAIL,
+    name: str = "Test User",
+) -> dict:
+    """Forge a NextAuth-style JWT for protected-endpoint tests."""
+    token = jwt.encode(
+        {"sub": sub, "email": email, "name": name},
+        TEST_JWT_SECRET,
+        algorithm="HS256",
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(name="auth_headers")
+def auth_headers_fixture():
+    return make_auth_header()
+
 
 @pytest.fixture(name="tmp_storage", autouse=False)
 def tmp_storage_fixture(tmp_path, monkeypatch):
-    """Point image storage at a temporary directory."""
+    """Point image storage at a temporary directory + set the JWT secret."""
     monkeypatch.setenv("IMAGE_STORAGE_DIR", str(tmp_path))
+    monkeypatch.setenv("NEXTAUTH_SECRET", TEST_JWT_SECRET)
     from app.config import get_settings
     get_settings.cache_clear()
     yield tmp_path

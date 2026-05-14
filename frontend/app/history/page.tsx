@@ -5,16 +5,14 @@ import Link from "next/link";
 import { AnimatePresence } from "framer-motion";
 import { ArrowRight, RefreshCw } from "lucide-react";
 import { HistoryCard, type HistoryItem } from "@/components/history-card";
+import { apiFetch } from "@/lib/api";
 
 interface HistoryListResponse {
   items: HistoryItem[];
   total: number;
 }
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-
 type Status =
-  | { type: "no-profile" }
   | { type: "loading" }
   | { type: "error" }
   | { type: "empty" }
@@ -25,19 +23,8 @@ export default function HistoryPage() {
 
   async function load() {
     setStatus({ type: "loading" });
-
-    const userId =
-      typeof window !== "undefined"
-        ? localStorage.getItem("hiwaloy_user_id")
-        : null;
-
-    if (!userId) {
-      setStatus({ type: "no-profile" });
-      return;
-    }
-
     try {
-      const res = await fetch(`${BASE}/api/v1/history/${userId}`);
+      const res = await apiFetch("/api/v1/history");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: HistoryListResponse = await res.json();
 
@@ -54,12 +41,6 @@ export default function HistoryPage() {
   }, []);
 
   async function handleDelete(analysisId: string) {
-    const userId =
-      typeof window !== "undefined"
-        ? localStorage.getItem("hiwaloy_user_id")
-        : null;
-    if (!userId) return;
-
     // Optimistic update — remove the row from the visible list first.
     setStatus((prev) => {
       if (prev.type !== "ready") return prev;
@@ -70,15 +51,13 @@ export default function HistoryPage() {
     });
 
     try {
-      const res = await fetch(
-        `${BASE}/api/v1/history/${userId}/${analysisId}`,
-        { method: "DELETE" }
-      );
+      const res = await apiFetch(`/api/v1/history/${analysisId}`, {
+        method: "DELETE",
+      });
       if (!res.ok && res.status !== 204) {
         throw new Error(`HTTP ${res.status}`);
       }
     } catch {
-      // Re-sync from server on failure so the UI doesn't lie.
       load();
     }
   }
@@ -108,20 +87,6 @@ export default function HistoryPage() {
       {status.type === "loading" && (
         <div className="panel p-6 text-sm text-subtle-foreground">
           Yükleniyor…
-        </div>
-      )}
-
-      {status.type === "no-profile" && (
-        <div className="panel flex flex-col items-start gap-3 p-6">
-          <p className="text-sm text-muted-foreground">
-            Önce profilini oluştur.
-          </p>
-          <Link
-            href="/onboarding"
-            className="inline-flex items-center gap-2 rounded-pill bg-brand-gradient px-4 py-2 text-xs font-semibold text-white transition hover:brightness-110"
-          >
-            Profil Oluştur <ArrowRight size={12} />
-          </Link>
         </div>
       )}
 

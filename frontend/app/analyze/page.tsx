@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, MessageSquare, ArrowRight, RefreshCw, AlertTriangle, ShieldCheck } from "lucide-react";
 import { AnalysisProgress } from "@/components/analysis-progress";
+import { apiFetch } from "@/lib/api";
 
 type Phase =
   | "idle"
@@ -55,7 +56,7 @@ const RISK_PILL: Record<string, string> = {
 
 export default function AnalyzePage() {
   const [phase, setPhase] = useState<Phase>("idle");
-  const [userId, setUserId] = useState<string | null>(null);
+  const [hasProfile, setHasProfile] = useState<boolean | null>(null);
   const [garmentFile, setGarmentFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -65,7 +66,11 @@ export default function AnalyzePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setUserId(localStorage.getItem("hiwaloy_user_id"));
+    // Probe the auth-scoped profile endpoint to decide whether onboarding is
+    // needed before letting the user run an analysis.
+    apiFetch("/api/v1/profile/me")
+      .then((r) => setHasProfile(r.ok))
+      .catch(() => setHasProfile(false));
   }, []);
 
   useEffect(() => {
@@ -110,7 +115,7 @@ export default function AnalyzePage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!garmentFile || !userId) return;
+    if (!garmentFile || !hasProfile) return;
 
     resultRef.current = null;
     setResult(null);
@@ -123,10 +128,9 @@ export default function AnalyzePage() {
 
     try {
       const fd = new FormData();
-      fd.append("user_id", userId);
       fd.append("garment_image", garmentFile);
 
-      const res = await fetch(`${BASE}/api/v1/analyze`, {
+      const res = await apiFetch("/api/v1/analyze", {
         method: "POST", body: fd, signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -285,7 +289,7 @@ export default function AnalyzePage() {
 
           <button
             type="submit"
-            disabled={!garmentFile || !userId}
+            disabled={!garmentFile || !hasProfile}
             className="inline-flex items-center justify-center gap-2 rounded-pill bg-brand-gradient px-5 py-3 text-sm font-semibold text-white brand-glow transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-30"
           >
             Analizi Başlat <ArrowRight size={14} />
@@ -503,8 +507,8 @@ export default function AnalyzePage() {
       </header>
 
       <AnimatePresence mode="wait">
-        {phase === "idle" && !userId && renderNoProfile()}
-        {phase === "idle" && userId && renderUploadForm()}
+        {phase === "idle" && hasProfile === false && renderNoProfile()}
+        {phase === "idle" && hasProfile === true && renderUploadForm()}
         {isInProgress && renderProgress()}
         {phase === "done" && renderResults()}
         {phase === "error" && renderError()}

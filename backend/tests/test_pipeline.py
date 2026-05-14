@@ -307,29 +307,27 @@ async def test_pipeline_no_body_image_still_completes(tmp_path):
 # API endpoint integration tests
 # ---------------------------------------------------------------------------
 
-def _create_user(client):
+def _onboard(client, auth_headers):
     r = client.post(
         "/api/v1/profile",
         data={"height_cm": "175", "weight_kg": "70", "fit_preference": "regular"},
+        headers=auth_headers,
     )
     assert r.status_code == 201
-    return r.json()["user_id"]
 
 
-def test_api_analyze_returns_ai_fields(client):
-    uid = _create_user(client)
+def test_api_analyze_returns_ai_fields(client, auth_headers):
+    _onboard(client, auth_headers)
     r = client.post(
         "/api/v1/analyze",
-        data={"user_id": uid},
         files={"garment_image": ("shirt.jpg", JPEG_BYTES, "image/jpeg")},
+        headers=auth_headers,
     )
     assert r.status_code == 202
     body = r.json()
-    # Core fields still present
     assert "analysis_id" in body
     assert body["garment_image_ref"].startswith("garment/")
     assert "Görsel doğrulandı" in body["message"]
-    # AI fields populated by mock pipeline
     assert body["recommended_size"] in ("XS", "S", "M", "L", "XL", "XXL")
     assert body["confidence_score"] is not None
     assert body["confidence_pct"].startswith("%")
@@ -341,15 +339,15 @@ def test_api_analyze_returns_ai_fields(client):
     assert isinstance(body["community_insights_tr"], list)
 
 
-def test_api_analyze_stores_result_in_history(client):
-    uid = _create_user(client)
+def test_api_analyze_stores_result_in_history(client, auth_headers):
+    _onboard(client, auth_headers)
     upload = client.post(
         "/api/v1/analyze",
-        data={"user_id": uid},
         files={"garment_image": ("shirt.jpg", JPEG_BYTES, "image/jpeg")},
+        headers=auth_headers,
     ).json()
 
-    r = client.get(f"/api/v1/history/{uid}/{upload['analysis_id']}")
+    r = client.get(f"/api/v1/history/{upload['analysis_id']}", headers=auth_headers)
     assert r.status_code == 200
     detail = r.json()
     assert detail["recommended_size"] == upload["recommended_size"]

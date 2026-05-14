@@ -1,4 +1,4 @@
-"""UC-08 — Save and retrieve analysis history."""
+"""UC-08 — Save and retrieve analysis history (authenticated)."""
 
 import logging
 from uuid import UUID
@@ -7,10 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlmodel import Session
 
+from app.api.auth import get_current_user
 from app.config import get_settings
 from app.db import get_session
+from app.models.user import User
 from app.repositories.analyses import AnalysisRepository
-from app.repositories.users import UserRepository
 from app.schemas.history import AnalysisDetailResponse, HistoryItem, HistoryListResponse
 from app.services.image_store import delete_image
 
@@ -18,21 +19,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/history/{user_id}", response_model=HistoryListResponse)
+@router.get("/history", response_model=HistoryListResponse)
 def list_history(
-    user_id: UUID,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> HistoryListResponse:
-    """
-    UC-08: Return all saved analyses for a user, newest first.
-    Returns an empty list if the user exists but has no analyses.
-    """
-    user_repo = UserRepository(session)
-    if user_repo.get_by_id(user_id) is None:
-        raise HTTPException(404, detail="Kullanıcı profili bulunamadı.")
-
+    """Return all saved analyses for the authenticated user, newest first."""
     analysis_repo = AnalysisRepository(session)
-    analyses = analysis_repo.list_by_user(user_id)
+    analyses = analysis_repo.list_by_user(current_user.id)
 
     items = [
         HistoryItem(
@@ -47,23 +41,17 @@ def list_history(
     return HistoryListResponse(items=items, total=len(items))
 
 
-@router.get("/history/{user_id}/{analysis_id}", response_model=AnalysisDetailResponse)
+@router.get("/history/{analysis_id}", response_model=AnalysisDetailResponse)
 def get_analysis(
-    user_id: UUID,
     analysis_id: UUID,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> AnalysisDetailResponse:
-    """
-    UC-08: Return a single analysis record with all AI output fields.
-    """
-    user_repo = UserRepository(session)
-    if user_repo.get_by_id(user_id) is None:
-        raise HTTPException(404, detail="Kullanıcı profili bulunamadı.")
-
+    """Return a single analysis record; 404 if it belongs to a different user."""
     analysis_repo = AnalysisRepository(session)
     analysis = analysis_repo.get_by_id(analysis_id)
 
-    if analysis is None or analysis.user_id != user_id:
+    if analysis is None or analysis.user_id != current_user.id:
         raise HTTPException(404, detail="Analiz kaydı bulunamadı.")
 
     return AnalysisDetailResponse(
@@ -78,22 +66,16 @@ def get_analysis(
     )
 
 
-@router.delete("/history/{user_id}/{analysis_id}", status_code=204)
+@router.delete("/history/{analysis_id}", status_code=204)
 def delete_analysis(
-    user_id: UUID,
     analysis_id: UUID,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> Response:
-    """
-    UC-08: Delete a single analysis record (and its garment image on disk).
-    """
-    user_repo = UserRepository(session)
-    if user_repo.get_by_id(user_id) is None:
-        raise HTTPException(404, detail="Kullanıcı profili bulunamadı.")
-
+    """Delete a single analysis (record + garment image). Ownership-checked."""
     analysis_repo = AnalysisRepository(session)
     analysis = analysis_repo.get_by_id(analysis_id)
-    if analysis is None or analysis.user_id != user_id:
+    if analysis is None or analysis.user_id != current_user.id:
         raise HTTPException(404, detail="Analiz kaydı bulunamadı.")
 
     settings = get_settings()
@@ -103,5 +85,5 @@ def delete_analysis(
             storage_dir=settings.image_storage_dir,
         )
     analysis_repo.delete(analysis)
-    logger.info("analysis_deleted analysis_id=%s user_id=%s", analysis_id, user_id)
+    logger.info("analysis_deleted analysis_id=%s user_id=%s", analysis_id, current_user.id)
     return Response(status_code=204)

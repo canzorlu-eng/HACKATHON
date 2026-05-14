@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     gemini_model: str = Field(default="")
     embedding_model: str = Field(default="")
 
+    # Shared HS256 secret used by NextAuth (frontend) to sign session JWTs
+    # and by FastAPI to verify them. Must match NEXTAUTH_SECRET in frontend.
+    nextauth_secret: str = Field(default="")
+
     demo_mode: bool = Field(default=False)
 
     @property

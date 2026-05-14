@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowUpRight, Shirt, MessageSquare, ShieldCheck } from "lucide-react";
 import { MannequinHero } from "@/components/dashboard/mannequin";
+import { apiFetch } from "@/lib/api";
 
 interface HistoryItem {
   analysis_id: string;
@@ -13,8 +14,6 @@ interface HistoryItem {
   recommended_size: string | null;
   risk_level: "low" | "medium" | "high" | null;
 }
-
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 const RISK_PILL: Record<string, string> = {
   low: "text-success bg-success/10 border-success/30",
@@ -33,14 +32,15 @@ export default function HomePage() {
   const [hasProfile, setHasProfile] = useState<boolean>(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const userId = localStorage.getItem("hiwaloy_user_id");
-    if (!userId) return;
-    setHasProfile(true);
+    // Authenticated by middleware; probe /profile/me to learn if onboarding
+    // is needed, then fetch the latest 4 analyses if a profile exists.
+    apiFetch("/api/v1/profile/me")
+      .then((r) => setHasProfile(r.ok))
+      .catch(() => setHasProfile(false));
 
-    fetch(`${BASE}/api/v1/history/${userId}`)
+    apiFetch("/api/v1/history")
       .then((r) => (r.ok ? r.json() : { items: [] }))
-      .then((data) => setItems(data.items?.slice(0, 4) ?? []))
+      .then((data) => setItems((data.items ?? []).slice(0, 4)))
       .catch(() => setItems([]));
   }, []);
 
