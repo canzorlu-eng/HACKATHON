@@ -310,7 +310,8 @@ def turkish_formatter_node(state: PipelineState) -> dict:
 
     community_tr: list[str] = []
     for ins in insights[:3]:
-        theme = ins.get("theme", "")
+        # Grounded service insights use `theme_tr`; fallback insights use `theme`.
+        theme = ins.get("theme_tr") or ins.get("theme", "")
         if not theme:
             continue
         if ins.get("is_fallback"):

@@ -33,6 +33,12 @@ Thumbs.db
 backend/data/uploaded_images/
 backend/app/data/.cache/
 
+# TLS / private key files
+*.pem
+*.key
+*.p12
+*.pfx
+
 # Claude / swarm artifacts already in repo
 .claude-flow/
 .swarm/

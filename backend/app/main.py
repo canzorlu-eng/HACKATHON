@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Create DB tables on startup; nothing to tear down on shutdown."""
+    settings = get_settings()
+    if settings.demo_mode:
+        logger.info("DEMO_MODE=true — MockAIClient + in-memory reviews active")
     try:
         from app.db import create_db_tables
         create_db_tables()

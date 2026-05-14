@@ -40,8 +40,15 @@ services:
         condition: service_healthy
       chroma:
         condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     environment:
       APP_ENV: ${APP_ENV}
+      DEMO_MODE: ${DEMO_MODE:-true}
       LOG_LEVEL: ${LOG_LEVEL}
       CORS_ORIGINS: ${CORS_ORIGINS}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB}
@@ -72,7 +79,8 @@ services:
     container_name: hiwaloy-frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
       NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME}

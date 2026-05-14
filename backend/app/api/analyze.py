@@ -1,5 +1,6 @@
 """UC-02 / UC-03–07 — Garment upload + LangGraph fit analysis pipeline."""
 
+import asyncio
 import logging
 from uuid import UUID
 
@@ -86,9 +87,14 @@ async def start_analysis(
         "pipeline_error":  None,
     }
 
+    _PIPELINE_TIMEOUT = 30.0  # seconds
+
     final_response_dict = None
     try:
-        final_state = await pipeline.ainvoke(initial_state)
+        final_state = await asyncio.wait_for(
+            pipeline.ainvoke(initial_state),
+            timeout=_PIPELINE_TIMEOUT,
+        )
         final_response_dict = final_state.get("final_response")
 
         if final_response_dict:
@@ -112,6 +118,9 @@ async def start_analysis(
                 analysis.id,
                 final_state["intent_error"],
             )
+    except asyncio.TimeoutError:
+        logger.warning("pipeline_timeout analysis_id=%s after %.0fs", analysis.id, _PIPELINE_TIMEOUT)
+        session.rollback()
     except Exception:
         logger.exception("pipeline_failed analysis_id=%s", analysis.id)
         session.rollback()

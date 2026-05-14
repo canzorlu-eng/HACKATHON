@@ -159,20 +159,22 @@ export default function AnalyzePage() {
       }, delay);
     };
 
-    advance("step_1", 500);
-    advance("step_2", 2000);
-    advance("step_3", 4000);
-    advance("step_4", 5500);
-    advance("step_5", 7000);
-    advance("step_6", 8500);
+    // Steps compressed to ~3.5 s so DEMO_MODE (~1 s pipeline) flows naturally.
+    // Real Gemini (~5–10 s) will arrive after all timers and the API callback
+    // flips to "done" directly; the 35 s AbortController handles actual hangs.
+    advance("step_1",  400);
+    advance("step_2",  900);
+    advance("step_3", 1600);
+    advance("step_4", 2300);
+    advance("step_5", 2900);
+    advance("step_6", 3400);
 
-    // After step_6 timer fires, check if API already returned
+    // After step_6 fires, flip to done if the API has already returned.
     setTimeout(() => {
       if (resultRef.current) {
         setPhase("done");
       }
-      // If not, the API completion handler will set done when it runs
-    }, 8700);
+    }, 3600);
   }
 
   // --------------------------------------------------------------------------
@@ -189,6 +191,9 @@ export default function AnalyzePage() {
     setPhase("uploading");
     startStepTimers();
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 35000);
+
     try {
       const fd = new FormData();
       fd.append("user_id", userId);
@@ -197,22 +202,35 @@ export default function AnalyzePage() {
       const res = await fetch(`${BASE}/api/v1/analyze`, {
         method: "POST",
         body: fd,
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        const body = await res.json().catch(() => ({}));
+        const detail = (body as { detail?: string }).detail;
+        throw new Error(detail ?? `HTTP ${res.status}`);
       }
 
       const data: AnalysisResult = await res.json();
       resultRef.current = data;
       setResult(data);
 
-      // If step_6 has already fired, flip to done now; otherwise the 8.7s timer handles it
-      setPhase((prev) => (prev === "step_6" ? "done" : prev));
+      // Flip to done as soon as we're past step_1; the 3.6s timer handles the
+      // case where the API beats the timers entirely.
+      const DONE_ELIGIBLE: Phase[] = ["step_2", "step_3", "step_4", "step_5", "step_6"];
+      setPhase((prev) => (DONE_ELIGIBLE.includes(prev) ? "done" : prev));
     } catch (err) {
-      console.error(err);
+      clearTimeout(timeoutId);
+      const isAbort = err instanceof Error && err.name === "AbortError";
       setPhase("error");
-      setErrorMsg("Analiz sırasında bir hata oluştu.");
+      setErrorMsg(
+        isAbort
+          ? "Analiz zaman aşımına uğradı. Lütfen tekrar deneyin."
+          : err instanceof Error && err.message && !err.message.startsWith("HTTP")
+          ? err.message
+          : "Analiz sırasında bir hata oluştu. Lütfen tekrar deneyin."
+      );
     }
   }
 
@@ -305,7 +323,7 @@ export default function AnalyzePage() {
                   Görsel seçmek için tıklayın
                 </span>
                 <span className="text-xs text-muted-foreground/60">
-                  JPEG veya PNG, maks 10 MB
+                  JPEG veya PNG, maks 8 MB
                 </span>
               </>
             )}
@@ -335,6 +353,7 @@ export default function AnalyzePage() {
   }
 
   function renderProgress() {
+    const isFinalizingStep = phase === "step_6";
     return (
       <motion.div
         key="progress"
@@ -344,7 +363,9 @@ export default function AnalyzePage() {
         className="flex flex-col gap-6 rounded-xl border border-border bg-background p-6 shadow-sm"
       >
         <p className="text-sm font-medium text-foreground">
-          Analiziniz hazırlanıyor…
+          {isFinalizingStep
+            ? "Sonuçlar hazırlanıyor, lütfen bekleyin…"
+            : "Analiziniz hazırlanıyor…"}
         </p>
         <AnalysisProgress currentStep={phaseToStep(phase)} />
       </motion.div>

@@ -63,6 +63,9 @@ export default function OnboardingPage() {
 
     setIsSubmitting(true);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     try {
       const fd = new FormData();
       fd.append("height_cm", String(heightCm));
@@ -73,26 +76,40 @@ export default function OnboardingPage() {
       const res = await fetch(`${API_BASE}/api/v1/profile`, {
         method: "POST",
         body: fd,
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        const body = await res.json().catch(() => ({}));
+        const detail = (body as { detail?: string }).detail;
+        throw new Error(detail ?? `HTTP ${res.status}`);
       }
 
       const data = await res.json();
       const userId: string = data.user_id ?? data.id ?? "";
 
-      if (userId) {
-        localStorage.setItem("hiwaloy_user_id", userId);
+      if (!userId) {
+        setApiError("Profil oluşturulamadı. Lütfen tekrar deneyin.");
+        return;
       }
 
+      localStorage.setItem("hiwaloy_user_id", userId);
       setSuccessMessage("Profiliniz oluşturuldu! Yönlendiriliyor…");
 
       setTimeout(() => {
         router.push("/analyze");
       }, 800);
-    } catch {
-      setApiError("Bir hata oluştu. Lütfen tekrar deneyin.");
+    } catch (err) {
+      clearTimeout(timeoutId);
+      const isAbort = err instanceof Error && err.name === "AbortError";
+      setApiError(
+        isAbort
+          ? "Bağlantı zaman aşımına uğradı. Lütfen tekrar deneyin."
+          : err instanceof Error && err.message && !err.message.startsWith("HTTP")
+          ? err.message
+          : "Bir hata oluştu. Lütfen tekrar deneyin."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -231,7 +248,7 @@ export default function OnboardingPage() {
                   ref={fileInputRef}
                   id="body_image"
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png"
                   onChange={handleFileChange}
                   className="hidden"
                 />

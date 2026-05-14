@@ -260,18 +260,116 @@ class ReviewIntelligenceService:
         )
 
 
+# ── Demo seed data ─────────────────────────────────────────────────────────
+
+_DEMO_DOCS = [
+    {
+        "id": "demo_1",
+        "text": "Kıyafet beden konusunda sorun çıkarmadı, normal kalıp.",
+        "meta": {"themes": "beden uyumu", "sentiment": "positive",
+                 "garment_id": "g_demo_1", "purchased_size": "M", "fits_true": "True"},
+    },
+    {
+        "id": "demo_2",
+        "text": "Kumaş kalitesi çok iyiydi, yumuşak ve rahat.",
+        "meta": {"themes": "kumaş kalitesi", "sentiment": "positive",
+                 "garment_id": "g_demo_2", "purchased_size": "M", "fits_true": "True"},
+    },
+    {
+        "id": "demo_3",
+        "text": "Beden biraz küçük geldi, bir üst beden almak gerekti.",
+        "meta": {"themes": "beden uyumu, dar kesim", "sentiment": "negative",
+                 "garment_id": "g_demo_3", "purchased_size": "L", "fits_true": "False"},
+    },
+    {
+        "id": "demo_4",
+        "text": "Kol boyu biraz kısa geldi, dikkat etmek lazım.",
+        "meta": {"themes": "kol boyu", "sentiment": "neutral",
+                 "garment_id": "g_demo_4", "purchased_size": "M", "fits_true": "False"},
+    },
+    {
+        "id": "demo_5",
+        "text": "Harika bir ürün, tam kalıbında.",
+        "meta": {"themes": "beden uyumu", "sentiment": "positive",
+                 "garment_id": "g_demo_5", "purchased_size": "S", "fits_true": "True"},
+    },
+]
+
+
+class _DemoCollection:
+    """
+    Pure-Python ChromaDB collection stub for DEMO_MODE.
+
+    Avoids importing chromadb so demo startup does not trigger the
+    79 MB MiniLM ONNX download. Returns the seeded demo docs with
+    fixed similarity scores (Jaccard-based) so the existing relevance
+    filter still works.
+    """
+
+    def __init__(self, docs: list[dict]) -> None:
+        self._docs = docs
+
+    def count(self) -> int:
+        return len(self._docs)
+
+    def query(self, query_texts, n_results, include):  # noqa: ARG002
+        query = (query_texts[0] if query_texts else "").lower()
+        q_tokens = set(query.split())
+        scored: list[tuple[float, dict]] = []
+        for d in self._docs:
+            text_tokens = set(d["text"].lower().split())
+            theme_tokens = set((d["meta"].get("themes") or "").lower().replace(",", " ").split())
+            tokens = text_tokens | theme_tokens
+            overlap = len(q_tokens & tokens)
+            denom = max(len(q_tokens | tokens), 1)
+            sim = max(0.35, min(0.95, 0.40 + (overlap / denom) * 0.55))
+            scored.append((sim, d))
+        scored.sort(key=lambda kv: kv[0], reverse=True)
+        sample = scored[: min(n_results, len(scored))]
+        return {
+            "documents": [[d["text"] for _, d in sample]],
+            "metadatas": [[d["meta"] for _, d in sample]],
+            "distances": [[1.0 - sim for sim, _ in sample]],
+        }
+
+
+def _make_demo_service() -> ReviewIntelligenceService:
+    """Build an in-process review service seeded with demo documents.
+
+    Uses a pure-Python collection stub (no chromadb dependency) to keep
+    DEMO_MODE startup instant — the real ChromaDB embedding model would
+    otherwise download ~79 MB on first query and overrun the pipeline timeout.
+    """
+    col = _DemoCollection(_DEMO_DOCS)
+    service = ReviewIntelligenceService.__new__(ReviewIntelligenceService)
+    service._client = None
+    service._collection_name = "reviews_v1"
+    service._col = col
+    return service
+
+
 # ── Factory ────────────────────────────────────────────────────────────────
 
 def get_review_service() -> ReviewIntelligenceService | None:
     """
-    Return a ReviewIntelligenceService backed by ChromaDB HttpClient.
-    Returns None on any connection failure — callers must handle gracefully.
+    Return a ReviewIntelligenceService.
+
+    - DEMO_MODE=true → returns an in-memory EphemeralClient seeded with demo docs.
+    - Otherwise → connects to ChromaDB HttpClient; returns None on failure.
     """
+    from app.config import get_settings
+    s = get_settings()
+
+    if s.demo_mode:
+        try:
+            return _make_demo_service()
+        except Exception as exc:
+            logger.debug("demo_review_service_failed: %s", type(exc).__name__)
+            return None
+
     try:
         import chromadb
-        from app.config import get_settings
 
-        s = get_settings()
         client = chromadb.HttpClient(
             host=s.chroma_host,
             port=int(s.chroma_port),

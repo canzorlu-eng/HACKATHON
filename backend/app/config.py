@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     gemini_model: str = Field(default="")
     embedding_model: str = Field(default="")
 
+    demo_mode: bool = Field(default=False)
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

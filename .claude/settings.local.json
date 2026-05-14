@@ -31,7 +31,13 @@
       "Bash(node_modules\\\\.bin\\\\next build *)",
       "Bash(.venv/Scripts/python -m pytest tests/test_ai_client.py tests/test_review_intelligence.py -v --tb=short)",
       "Bash(.venv/Scripts/python -m pytest tests/ -v --tb=short --ignore=tests/__init__.py)",
-      "Bash(.venv/Scripts/python -m pytest tests/test_ai_client.py tests/test_review_intelligence.py tests/test_pipeline.py tests/test_integration.py -v --tb=short)"
+      "Bash(.venv/Scripts/python -m pytest tests/test_ai_client.py tests/test_review_intelligence.py tests/test_pipeline.py tests/test_integration.py -v --tb=short)",
+      "Bash(.venv/Scripts/python -m pytest tests/test_ai_client.py tests/test_review_intelligence.py tests/test_integration.py tests/test_pipeline.py -v --tb=short)",
+      "Bash(.venv/Scripts/python -m pytest tests/test_integration.py tests/test_pipeline.py -v --tb=short -q)",
+      "Bash(.venv/Scripts/python -m pytest tests/test_integration.py tests/test_pipeline.py -q --tb=line)",
+      "Bash(docker info *)",
+      "Bash(python -m pytest --tb=short -q)",
+      "PowerShell($env:PYTHONIOENCODING=\"utf-8\"; cd \"C:\\\\Users\\\\zorlu\\\\OneDrive\\\\Desktop\\\\HACKATHON\"; python scripts\\\\e2e_smoke.py 2>&1)"
     ]
   },
   "enableAllProjectMcpServers": true,

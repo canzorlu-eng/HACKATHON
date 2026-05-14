@@ -194,11 +194,15 @@ class RealGeminiClient:
 # ---------------------------------------------------------------------------
 
 def get_ai_client() -> AIClient:
-    """Returns RealGeminiClient if GEMINI_API_KEY is set, otherwise MockAIClient."""
+    """Returns RealGeminiClient if GEMINI_API_KEY is set, otherwise MockAIClient.
+    Always returns MockAIClient when DEMO_MODE=true."""
     from app.config import get_settings
     s = get_settings()
+    if s.demo_mode:
+        logger.info("DEMO_MODE=true — using MockAIClient (deterministic demo)")
+        return MockAIClient()
     if s.gemini_api_key:
         model = s.gemini_model or "gemini-1.5-flash"
         return RealGeminiClient(s.gemini_api_key, model)
-    logger.warning("GEMINI_API_KEY not set — using MockAIClient (demo mode)")
+    logger.warning("GEMINI_API_KEY not set — using MockAIClient")
     return MockAIClient()

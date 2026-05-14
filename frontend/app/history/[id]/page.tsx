@@ -46,7 +46,7 @@ export default function HistoryDetailPage() {
   const analysisId = params.id as string;
 
   const [detail, setDetail] = useState<AnalysisDetail | null>(null);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const userId = localStorage.getItem("hiwaloy_user_id");
@@ -55,22 +55,36 @@ export default function HistoryDetailPage() {
       return;
     }
 
-    fetch(`${BASE}/api/v1/history/${userId}/${analysisId}`)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    fetch(`${BASE}/api/v1/history/${userId}/${analysisId}`, { signal: controller.signal })
       .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        clearTimeout(timeoutId);
+        if (res.status === 404) throw new Error("not_found");
+        if (!res.ok) throw new Error("server_error");
         return res.json();
       })
       .then((data: AnalysisDetail) => setDetail(data))
-      .catch(() => setError(true));
+      .catch((err) => {
+        clearTimeout(timeoutId);
+        if (err instanceof Error && err.name === "AbortError") {
+          setError("Bağlantı zaman aşımına uğradı.");
+        } else if (err instanceof Error && err.message === "not_found") {
+          setError("Bu analiz kaydı bulunamadı.");
+        } else {
+          setError("Analiz detayı yüklenemedi.");
+        }
+      });
+
+    return () => { clearTimeout(timeoutId); controller.abort(); };
   }, [analysisId, router]);
 
   if (error) {
     return (
       <main className="min-h-dvh py-12 px-4">
         <div className="mx-auto w-full max-w-[600px] text-center">
-          <p className="text-sm text-muted-foreground">
-            Analiz detayı yüklenemedi.
-          </p>
+          <p className="text-sm text-muted-foreground">{error}</p>
           <button
             onClick={() => router.back()}
             className="mt-4 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-80 transition-opacity"
