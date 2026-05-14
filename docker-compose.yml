@@ -69,6 +69,8 @@ services:
       - "${BACKEND_PORT}:8000"
     volumes:
       - backend_images:/app/var/images
+      # Seeded MVP data — read-only inside the container.
+      - ./data:/app/data:ro
 
   frontend:
     build:

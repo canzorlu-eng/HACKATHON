@@ -145,9 +145,11 @@ def review_retriever_node(state: PipelineState) -> dict:
                     "review_retriever source=chroma insights=%d category=%s",
                     len(result.insights), category,
                 )
+                stats_dict = result.stats.model_dump() if result.stats else None
                 return {
                     "review_insights": result.as_pipeline_dicts,
                     "review_retrieval_status": result.status,
+                    "review_stats": stats_dict,
                 }
             # Empty or low-relevance — fall through to fallback
             logger.info(
@@ -170,6 +172,7 @@ def review_retriever_node(state: PipelineState) -> dict:
     return {
         "review_insights": insights,
         "review_retrieval_status": "fallback",
+        "review_stats": None,
     }
 
 
@@ -394,6 +397,7 @@ def turkish_formatter_node(state: PipelineState) -> dict:
         "confidence_score": confidence,
         "confidence_pct": pct,
         "explanation_tr": rec.get("explanation_tr", ""),
+        "detailed_explanation_tr": state.get("detailed_explanation_tr") or None,
         "risk_level": risk.get("risk_level", "medium"),
         "risk_level_tr": risk.get("risk_level_tr", "Orta Risk"),
         "risk_factors_tr": risk.get("risk_factors", []),
@@ -401,3 +405,62 @@ def turkish_formatter_node(state: PipelineState) -> dict:
         "community_insights_tr": community_tr,
     }
     return {"final_response": final_response}
+
+
+# ---------------------------------------------------------------------------
+# Node 5b: Narrative composer — Gemini-written detailed explanation
+# Runs after risk_evaluator so it can quote the final confidence/risk too.
+# ---------------------------------------------------------------------------
+
+def make_narrative_composer_node(ai_client):
+    """Returns a LangGraph-compatible async node bound to the given ai_client."""
+
+    async def narrative_composer_node(state: PipelineState) -> dict:
+        rec = state.get("recommendation") or {}
+        # No detailed narrative when the garment gate already short-circuited.
+        if rec.get("garment_invalid"):
+            return {"detailed_explanation_tr": None}
+
+        body    = dict(state.get("body_analysis") or {})
+        garment = state.get("garment_analysis") or {}
+        risk    = state.get("risk_evaluation")  or {}
+        stats   = state.get("review_stats")     or {}
+        has_body_image = bool(state.get("body_image_ref"))
+        profile = {
+            "height_cm":      state.get("height_cm"),
+            "weight_kg":      state.get("weight_kg"),
+            "fit_preference": state.get("fit_preference"),
+            "has_body_image": has_body_image,
+        }
+
+        # Without a body image, the analyzer's shoulder/torso/silhouette
+        # estimates are placeholder defaults — not observations. Strip them
+        # so Gemini cannot fabricate "Geniş omuz yapınız" from a default.
+        if not has_body_image:
+            for k in (
+                "shoulder_width_estimate",
+                "torso_length_estimate",
+                "proportional_notes",
+                "silhouette_type",
+            ):
+                body.pop(k, None)
+
+        try:
+            result = await ai_client.compose_narrative(
+                profile=profile,
+                body_analysis=body,
+                garment_analysis=garment,
+                recommendation=rec,
+                risk_evaluation=risk,
+                review_stats=stats,
+            )
+            text = (result or {}).get("detailed_explanation_tr")
+            if text:
+                logger.info("narrative_composed length=%d", len(text))
+                return {"detailed_explanation_tr": text}
+        except Exception:
+            logger.exception("narrative_composer_failed")
+
+        return {"detailed_explanation_tr": None}
+
+    return narrative_composer_node

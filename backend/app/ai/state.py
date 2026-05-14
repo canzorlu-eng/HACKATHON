@@ -24,9 +24,11 @@ class PipelineState(TypedDict, total=False):
 
     review_insights: list           # list of dicts: theme, count, sentiment
     review_retrieval_status: str    # "ok" | "empty" | "low_relevance" | "fallback" | "error"
+    review_stats: Optional[dict]    # aggregated %s from review corpus (see ReviewStats)
 
     recommendation: Optional[dict]  # recommended_size, confidence, explanation_tr, uncertainty_tr
     risk_evaluation: Optional[dict] # risk_level, risk_factors, risk_score, confidence
+    detailed_explanation_tr: Optional[str]  # multi-sentence narrative from compose_narrative
 
     final_response: Optional[dict]  # full Turkish-formatted output returned to the user
     pipeline_error: Optional[str]   # set on unexpected failures; pipeline still returns partial state

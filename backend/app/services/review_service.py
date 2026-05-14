@@ -21,7 +21,63 @@ from app.schemas.review import (
     ReviewDocument,
     ReviewInsightSummary,
     ReviewIntelligenceResult,
+    ReviewStats,
 )
+
+# Theme keyword buckets — used to label whether a reviewer effectively wanted
+# a bigger or smaller size, without inventing any data.
+_SMALL_CUT_KEYWORDS = ("küçük", "dar", "slim")
+_LARGE_CUT_KEYWORDS = ("büyük", "geniş", "bol", "oversize", "rahat kesim")
+
+
+def _compute_review_stats(items: list[tuple[str, dict, float]]) -> ReviewStats:
+    """Aggregate statistics over the relevant reviews. All counts are real."""
+    if not items:
+        return ReviewStats()
+
+    total = len(items)
+    fit_true_count = 0
+    resized_up = 0
+    resized_down = 0
+    theme_counts: dict[str, int] = {}
+    size_counts: dict[str, int] = {}
+
+    for _doc, meta, _sim in items:
+        fits_true_raw = str(meta.get("fits_true", "True")).lower() == "true"
+        if fits_true_raw:
+            fit_true_count += 1
+
+        themes_raw = (meta.get("themes") or "").lower()
+        themes_list = [t.strip() for t in themes_raw.split(",") if t.strip()]
+        for t in themes_list:
+            theme_counts[t] = theme_counts.get(t, 0) + 1
+
+        # Resize direction heuristic — fires only when fits_true is False AND
+        # the themes contain a directional keyword. Reviewers happy with their
+        # purchase don't contribute to either bucket.
+        if not fits_true_raw:
+            if any(k in themes_raw for k in _SMALL_CUT_KEYWORDS):
+                resized_up += 1
+            elif any(k in themes_raw for k in _LARGE_CUT_KEYWORDS):
+                resized_down += 1
+
+        purchased_size = str(meta.get("purchased_size", "")).strip()
+        if purchased_size:
+            size_counts[purchased_size] = size_counts.get(purchased_size, 0) + 1
+
+    def pct(n: int) -> int:
+        return int(round(n / total * 100))
+
+    top_themes = sorted(theme_counts.items(), key=lambda kv: kv[1], reverse=True)[:5]
+
+    return ReviewStats(
+        total_relevant=total,
+        fits_true_pct=pct(fit_true_count),
+        resized_up_pct=pct(resized_up),
+        resized_down_pct=pct(resized_down),
+        top_themes=top_themes,
+        sample_size_breakdown=size_counts,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -266,6 +322,7 @@ class ReviewIntelligenceService:
             retrieval_count=len(docs),
             unique_count=len(unique),
             relevant_count=len(relevant),
+            stats=_compute_review_stats(unique),
         )
 
 

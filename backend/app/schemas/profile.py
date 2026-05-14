@@ -33,6 +33,7 @@ class GarmentUploadResponse(BaseModel):
     confidence_score: Optional[float] = None
     confidence_pct: Optional[str] = None
     explanation_tr: Optional[str] = None
+    detailed_explanation_tr: Optional[str] = None
     risk_level: Optional[str] = None
     risk_level_tr: Optional[str] = None
     risk_factors_tr: Optional[list[str]] = None

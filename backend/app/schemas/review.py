@@ -56,6 +56,21 @@ class ReviewInsightSummary(BaseModel):
 RetrievalStatus = Literal["ok", "empty", "low_relevance", "fallback", "error"]
 
 
+class ReviewStats(BaseModel):
+    """Aggregated statistics computed over the relevant retrieved reviews.
+
+    These are real counts pulled from the review corpus metadata — never
+    invented. The narrative composer is allowed to quote these numbers
+    verbatim in the detailed explanation.
+    """
+    total_relevant: int = 0          # how many reviews matched the relevance gate
+    fits_true_pct: int = 0           # % of reviewers who reported the garment fit as expected
+    resized_up_pct: int = 0          # % who effectively wanted to size up (fits_true=False + small-cut theme)
+    resized_down_pct: int = 0        # % who effectively wanted to size down (fits_true=False + large-cut theme)
+    top_themes: list[tuple[str, int]] = Field(default_factory=list)  # [(theme, count), ...] sorted desc
+    sample_size_breakdown: dict[str, int] = Field(default_factory=dict)  # purchased_size → count
+
+
 class ReviewIntelligenceResult(BaseModel):
     """Full output of the UC-06 Review Intelligence pipeline step."""
 
@@ -65,6 +80,7 @@ class ReviewIntelligenceResult(BaseModel):
     unique_count: int = 0         # after deduplication
     relevant_count: int = 0       # after relevance filtering
     message_tr: Optional[str] = None  # Turkish status message (set on non-ok paths)
+    stats: Optional[ReviewStats] = None  # only present when status == "ok"
 
     @property
     def community_insights_tr(self) -> list[str]:

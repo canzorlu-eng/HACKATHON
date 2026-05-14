@@ -17,6 +17,7 @@ from langgraph.graph import END, START, StateGraph
 from app.ai.nodes import (
     intent_validator_node,
     make_analyzer_node,
+    make_narrative_composer_node,
     recommendation_generator_node,
     review_retriever_node,
     risk_evaluator_node,
@@ -42,6 +43,7 @@ def build_pipeline(ai_client):
     workflow.add_node("review_retriever",          review_retriever_node)
     workflow.add_node("recommendation_generator",  recommendation_generator_node)
     workflow.add_node("risk_evaluator",            risk_evaluator_node)
+    workflow.add_node("narrative_composer",        make_narrative_composer_node(ai_client))
     workflow.add_node("turkish_formatter",         turkish_formatter_node)
 
     workflow.add_edge(START, "intent_validator")
@@ -49,7 +51,8 @@ def build_pipeline(ai_client):
     workflow.add_edge("analyzer",                 "review_retriever")
     workflow.add_edge("review_retriever",         "recommendation_generator")
     workflow.add_edge("recommendation_generator", "risk_evaluator")
-    workflow.add_edge("risk_evaluator",           "turkish_formatter")
+    workflow.add_edge("risk_evaluator",           "narrative_composer")
+    workflow.add_edge("narrative_composer",       "turkish_formatter")
     workflow.add_edge("turkish_formatter",        END)
 
     return workflow.compile()

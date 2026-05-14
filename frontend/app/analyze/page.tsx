@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, MessageSquare, ArrowRight, RefreshCw, AlertTriangle, ShieldCheck } from "lucide-react";
 import { AnalysisProgress } from "@/components/analysis-progress";
+import { AgentPipeline } from "@/components/dashboard/agent-pipeline";
 import { apiFetch } from "@/lib/api";
 
 type Phase =
@@ -24,6 +25,7 @@ interface AnalysisResult {
   confidence_score: number | null;
   confidence_pct: string | null;
   explanation_tr: string | null;
+  detailed_explanation_tr: string | null;
   uncertainty_tr: string | null;
   risk_level: "low" | "medium" | "high" | null;
   risk_level_tr: string | null;
@@ -307,17 +309,23 @@ export default function AnalyzePage() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -12 }}
-        className="panel flex flex-col gap-5 p-6"
+        className="flex flex-col gap-5"
       >
-        <div className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-soft text-brand">
-            <RefreshCw size={14} className="animate-spin" />
-          </span>
-          <p className="text-sm font-medium text-foreground">
-            {isFinalizingStep ? "Sonuçlar hazırlanıyor…" : "Analiz çalışıyor…"}
-          </p>
+        <div className="panel flex flex-col gap-5 p-6">
+          <div className="flex items-center gap-2">
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-soft text-brand">
+              <RefreshCw size={14} className="animate-spin" />
+            </span>
+            <p className="text-sm font-medium text-foreground">
+              {isFinalizingStep
+                ? "Sonuçlar hazırlanıyor…"
+                : "Analiz çalışıyor…"}
+            </p>
+          </div>
+          <AnalysisProgress currentStep={phaseToStep(phase)} />
         </div>
-        <AnalysisProgress currentStep={phaseToStep(phase)} />
+        {/* Live multi-agent breakdown — additive, shows judges the architecture */}
+        <AgentPipeline phase={phase} />
       </motion.div>
     );
   }
@@ -326,7 +334,8 @@ export default function AnalyzePage() {
     if (!result) return null;
     const {
       recommended_size, confidence_score, confidence_pct, explanation_tr,
-      uncertainty_tr, risk_level, risk_level_tr, risk_factors_tr, community_insights_tr,
+      detailed_explanation_tr, uncertainty_tr, risk_level, risk_level_tr,
+      risk_factors_tr, community_insights_tr,
     } = result;
 
     const safeRiskFactors = risk_factors_tr ?? [];
@@ -341,8 +350,12 @@ export default function AnalyzePage() {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -12 }}
         transition={{ duration: 0.4 }}
-        className="grid grid-cols-1 gap-5 lg:grid-cols-[1.15fr_1fr]"
+        className="flex flex-col gap-5"
       >
+        {/* Compact "what ran" confirmation strip above the result panels */}
+        <AgentPipeline phase="done" variant="compact" />
+
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.15fr_1fr]">
         {/* Big recommendation card */}
         <div className="panel flex flex-col gap-5 p-6">
           <div className="flex items-end justify-between">
@@ -378,6 +391,16 @@ export default function AnalyzePage() {
               <span className="font-medium text-foreground">Açıklama: </span>
               {explanation_tr}
             </p>
+          )}
+          {detailed_explanation_tr && (
+            <div className="rounded-card border border-brand/25 bg-brand-soft p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-brand">
+                Detaylı Analiz
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-foreground">
+                {detailed_explanation_tr}
+              </p>
+            </div>
           )}
           {uncertainty_tr && (
             <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs leading-relaxed text-warning">
@@ -457,6 +480,7 @@ export default function AnalyzePage() {
               </ul>
             )}
           </div>
+        </div>
         </div>
       </motion.div>
     );

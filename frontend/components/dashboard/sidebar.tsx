@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
-import { Sparkles, History, User2, Wand2, Home, LogOut } from "lucide-react";
+import { Sparkles, History, User2, Wand2, Home, LogOut, Shirt } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
 const API_BASE =
@@ -13,6 +13,7 @@ const API_BASE =
 const items = [
   { href: "/", label: "Ana Sayfa", icon: Home },
   { href: "/analyze", label: "Analiz", icon: Wand2 },
+  { href: "/stilist", label: "Stilist", icon: Shirt },
   { href: "/history", label: "Geçmiş", icon: History },
   { href: "/onboarding", label: "Profilim", icon: User2 },
 ];

@@ -11,6 +11,7 @@ interface FormattedResponse {
   confidence_score?: number | null;
   confidence_pct?: string | null;
   explanation_tr?: string | null;
+  detailed_explanation_tr?: string | null;
   uncertainty_tr?: string | null;
   risk_level?: string | null;
   risk_level_tr?: string | null;
@@ -163,6 +164,16 @@ export default function HistoryDetailPage() {
               <span className="font-medium text-foreground">Açıklama: </span>
               {fr.explanation_tr}
             </p>
+          )}
+          {fr.detailed_explanation_tr && (
+            <div className="rounded-card border border-brand/25 bg-brand-soft p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-brand">
+                Detaylı Analiz
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-foreground">
+                {fr.detailed_explanation_tr}
+              </p>
+            </div>
           )}
           {fr.uncertainty_tr && (
             <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs leading-relaxed text-warning">

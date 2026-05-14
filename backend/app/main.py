@@ -8,6 +8,7 @@ from app.api.analyze import router as analyze_router
 from app.api.health import router as health_router
 from app.api.history import router as history_router
 from app.api.profile import router as profile_router
+from app.api.stylist import router as stylist_router
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -43,13 +44,14 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
         allow_credentials=False,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["*"],
     )
     application.include_router(health_router, prefix="/api/v1")
     application.include_router(profile_router, prefix="/api/v1")
     application.include_router(analyze_router, prefix="/api/v1")
     application.include_router(history_router, prefix="/api/v1")
+    application.include_router(stylist_router, prefix="/api/v1")
     return application
 
 
