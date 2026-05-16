@@ -5,9 +5,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.analyze import router as analyze_router
+from app.api.cohort import router as cohort_router
 from app.api.health import router as health_router
 from app.api.history import router as history_router
 from app.api.profile import router as profile_router
+from app.api.qa import router as qa_router
 from app.api.stylist import router as stylist_router
 from app.config import get_settings
 
@@ -52,6 +54,8 @@ def create_app() -> FastAPI:
     application.include_router(analyze_router, prefix="/api/v1")
     application.include_router(history_router, prefix="/api/v1")
     application.include_router(stylist_router, prefix="/api/v1")
+    application.include_router(cohort_router, prefix="/api/v1")
+    application.include_router(qa_router, prefix="/api/v1")
     return application
 
 

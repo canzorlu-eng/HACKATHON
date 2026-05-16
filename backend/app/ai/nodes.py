@@ -529,6 +529,17 @@ def turkish_formatter_node(state: PipelineState) -> dict:
         weight_kg=int(state.get("weight_kg") or 65),
     )
 
+    # Carry the subset of garment_analysis used by downstream features (cohort
+    # endpoint, QA fact collectors). Not surfaced in GarmentUploadResponse —
+    # only persisted to analysis.formatted_response for later reads.
+    g = state.get("garment_analysis") or {}
+    garment_meta = {
+        "category":                g.get("category", ""),
+        "fit_type":                g.get("fit_type", "regular"),
+        "brand_sizing_tendency":   g.get("brand_sizing_tendency", "standart"),
+        "fabric_cues":             g.get("fabric_cues", ""),
+    }
+
     final_response = {
         "recommended_size": size,
         "confidence_score": confidence,
@@ -541,6 +552,7 @@ def turkish_formatter_node(state: PipelineState) -> dict:
         "uncertainty_tr": rec.get("uncertainty_tr", ""),
         "community_insights_tr": community_tr,
         "risk_heatmap": heatmap,
+        "garment_meta": garment_meta,
     }
     return {"final_response": final_response}
 

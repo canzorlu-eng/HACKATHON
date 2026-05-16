@@ -89,6 +89,42 @@ export const tr = {
     risk: "Risk",
     date: "Tarih",
   },
+  cohort: {
+    panel_title: "Benzer Kullanıcı Deneyimi",
+    scope_prefix: "Kapsam",
+    top_reasons_title: "En sık iade nedenleri",
+    not_enough_data: "Bu ürün için yeterli benzer kullanıcı verisi yok.",
+    returned_pct_suffix: "iade etmiş",
+    sample_quotes_title: "Örnek kullanıcı yorumları",
+    loading: "Benzer kullanıcılar inceleniyor…",
+    error: "Benzer kullanıcı verileri yüklenemedi.",
+  },
+  qa: {
+    section_title: "Bu ürün hakkında soru sor",
+    section_subtitle:
+      "Önerilen sorulara tıkla ya da kendi sorunu yaz — yanıtlar bu ürüne özel hazırlanır.",
+    placeholder: "Bir şey sor… örn. 'bu büyük mü?'",
+    send: "Gönder",
+    sending: "Yanıtlanıyor…",
+    error: "Yanıt alınamadı. Lütfen tekrar deneyin.",
+    chips: {
+      is_big: "bu büyük mü?",
+      fabric_sweat: "kumaş terletir mi?",
+      cut_wide: "bu kalıp geniş mi?",
+      similar_users: "benzer kullanıcılar ne yaşamış?",
+      return_reasons: "neden iade etmişler?",
+    },
+    intent_labels: {
+      is_big: "Beden",
+      fabric_sweat: "Kumaş",
+      cut_wide: "Kalıp",
+      similar_users: "Benzer kullanıcı",
+      return_reasons: "İade nedeni",
+      unsupported: "Kapsam dışı",
+    },
+    evidence_toggle: "Kanıt",
+    low_confidence_note: "Yeterli benzer kullanıcı verisi yok.",
+  },
 } as const;
 
 export type Translations = typeof tr;

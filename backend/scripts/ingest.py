@@ -42,9 +42,18 @@ def ingest(
     chroma_port: int,
     dry_run: bool = False,
 ) -> None:
-    reviews_path = data_dir / "reviews.jsonl"
+    # Prefer the enriched JSONL (output of scripts.augment_reviews) — it
+    # carries the deterministic `returned`, `return_reason`, `fabric_breathability`
+    # and `season_fit` fields that downstream features (cohort, qa) need to be
+    # filterable on Chroma metadata. Fall back to reviews.jsonl if the enriched
+    # file hasn't been generated yet so the existing dev flow still works.
+    enriched_path = data_dir / "reviews_enriched.jsonl"
+    fallback_path = data_dir / "reviews.jsonl"
+    reviews_path = enriched_path if enriched_path.exists() else fallback_path
+
     if not reviews_path.exists():
-        print(f"[ERROR] reviews.jsonl not found at {reviews_path}", file=sys.stderr)
+        print(f"[ERROR] no reviews JSONL found at {enriched_path} or {fallback_path}",
+              file=sys.stderr)
         sys.exit(1)
 
     reviews = load_reviews(reviews_path)
@@ -112,13 +121,18 @@ def ingest(
     documents  = [r["review_tr"] for r in reviews]
     metadatas  = [
         {
-            "garment_id":     r["garment_id"],
-            "purchased_size": str(r.get("purchased_size", "")),
-            "fits_true":      str(r.get("fits_true", True)),
-            "themes":         r.get("themes", ""),
-            "sentiment":      r.get("sentiment", "neutral"),
-            "height_cm":      str(r.get("height_cm", 0)),
-            "weight_kg":      str(r.get("weight_kg", 0)),
+            "garment_id":            r["garment_id"],
+            "purchased_size":        str(r.get("purchased_size", "")),
+            "fits_true":             str(r.get("fits_true", True)),
+            "themes":                r.get("themes", ""),
+            "sentiment":              r.get("sentiment", "neutral"),
+            "height_cm":             str(r.get("height_cm", 0)),
+            "weight_kg":             str(r.get("weight_kg", 0)),
+            # Enriched fields — present when reviews_enriched.jsonl is used.
+            "returned":              str(r.get("returned", False)),
+            "return_reason":         str(r.get("return_reason") or ""),
+            "fabric_breathability":  str(r.get("fabric_breathability") or "medium"),
+            "season_fit":            str(r.get("season_fit") or "all_season"),
         }
         for r in reviews
     ]

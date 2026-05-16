@@ -14,6 +14,8 @@ import re
 from pathlib import Path
 from typing import Optional
 
+from app.services.fabric_rules import breathability_for, season_fit_for
+
 logger = logging.getLogger(__name__)
 
 # data/garments.json sits at the repo root in dev, or copied to /app/data in
@@ -63,6 +65,10 @@ def _load() -> list[dict]:
                 items = json.load(f)
             for it in items:
                 it["price_tl"] = _derive_price_tl(it)
+                it["breathability"] = breathability_for(it.get("fabric", ""))
+                it["season_fit"]    = season_fit_for(
+                    it.get("fabric", ""), it.get("category", "")
+                )
             return items
     logger.warning("garments.json not found in any candidate path")
     return []

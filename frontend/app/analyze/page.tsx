@@ -7,6 +7,8 @@ import { Upload, MessageSquare, ArrowRight, RefreshCw, AlertTriangle, ShieldChec
 import { AnalysisProgress } from "@/components/analysis-progress";
 import { AgentPipeline } from "@/components/dashboard/agent-pipeline";
 import { BodyHeatmap, type HeatmapRegion } from "@/components/dashboard/body-heatmap";
+import { SimilarUsersPanel } from "@/components/dashboard/similar-users-panel";
+import { ProductQAChat } from "@/components/dashboard/product-qa-chat";
 import { apiFetch } from "@/lib/api";
 
 type Phase =
@@ -22,6 +24,7 @@ type Phase =
   | "error";
 
 interface AnalysisResult {
+  analysis_id: string;
   recommended_size: string | null;
   confidence_score: number | null;
   confidence_pct: string | null;
@@ -487,6 +490,14 @@ export default function AnalyzePage() {
 
         {risk_heatmap && risk_heatmap.length > 0 && (
           <BodyHeatmap regions={risk_heatmap} />
+        )}
+
+        {result.analysis_id && (
+          <SimilarUsersPanel analysisId={result.analysis_id} />
+        )}
+
+        {result.analysis_id && (
+          <ProductQAChat analysisId={result.analysis_id} />
         )}
       </motion.div>
     );
