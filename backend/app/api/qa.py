@@ -38,6 +38,15 @@ router = APIRouter()
 
 _MAX_QUERY_LEN = 200
 
+# Polite Turkish refusal returned when the underlying analysis flagged the
+# upload as not-a-garment. Fixed string — never LLM-generated — so the
+# message stays consistent and free of fabricated details.
+_NO_GARMENT_REFUSAL_TR = (
+    "Bu analizde tanınabilir bir kıyafet bulunamadı. "
+    "Önce geçerli bir kıyafet fotoğrafı yükleyip yeniden analiz yapın — "
+    "ardından bu ürün hakkında soru sorabilirsiniz."
+)
+
 
 @router.post("/qa", response_model=QAAnswerResponse, status_code=200)
 async def post_qa(
@@ -58,6 +67,23 @@ async def post_qa(
         raise HTTPException(
             status_code=409,
             detail="Bu analiz tamamlanmamış — önce yeniden analiz başlatın.",
+        )
+
+    # Garment-invalid analyses have no recommended_size — the upload was
+    # rejected by the analyzer's is_garment gate. Refuse politely without
+    # running any fact collector (collectors would read empty garment_meta
+    # and produce meaningless answers).
+    if analysis.formatted_response.get("recommended_size") is None:
+        logger.info(
+            "qa user_id=%s analysis_id=%s skipped=garment_invalid",
+            current_user.id, analysis_id,
+        )
+        return QAAnswerResponse(
+            intent="unsupported",
+            answer_tr=_NO_GARMENT_REFUSAL_TR,
+            confidence_band="low",
+            evidence_tr=[],
+            cohort_scope_tr=None,
         )
 
     intent = route_intent(text)

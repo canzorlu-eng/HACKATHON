@@ -178,6 +178,12 @@ export default function AnalyzePage() {
     setResult(null);
     setErrorMsg("");
     resultRef.current = null;
+    // The upload form renders at the top of the page. After scrolling
+    // through results to reach "Yeni Analiz", we need to bring the user
+    // back up so they actually see the form.
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }
 
   const isInProgress =
@@ -488,15 +494,19 @@ export default function AnalyzePage() {
         </div>
         </div>
 
-        {risk_heatmap && risk_heatmap.length > 0 && (
+        {/* Garment-valid analyses get the heatmap + cohort panel + QA chat.
+            When recommended_size is null the upload was rejected as not a
+            garment — we hide all three so the screen only shows the polite
+            "kıyafet bulunamadı" explanation card. */}
+        {recommended_size !== null && risk_heatmap && risk_heatmap.length > 0 && (
           <BodyHeatmap regions={risk_heatmap} />
         )}
 
-        {result.analysis_id && (
+        {recommended_size !== null && result.analysis_id && (
           <SimilarUsersPanel analysisId={result.analysis_id} />
         )}
 
-        {result.analysis_id && (
+        {recommended_size !== null && result.analysis_id && (
           <ProductQAChat analysisId={result.analysis_id} />
         )}
       </motion.div>

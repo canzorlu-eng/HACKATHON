@@ -146,3 +146,56 @@ def test_unsupported_question_routes_to_refusal(client, auth_headers):
     assert body["intent"] == "unsupported"
     assert body["confidence_band"] == "low"
     assert "HIWALOY" in body["answer_tr"]
+
+
+# ---------------------------------------------------------------------------
+# Garment-invalid gate — QA must refuse without running fact collectors
+# when the original analysis flagged the upload as not a garment.
+# ---------------------------------------------------------------------------
+
+def test_garment_invalid_analysis_returns_polite_refusal(
+    client, auth_headers, db_session,
+):
+    from uuid import uuid4
+    from app.models.analysis import Analysis
+    from app.repositories.users import UserRepository
+
+    _onboard(client, auth_headers)
+
+    user = UserRepository(db_session).get_by_google_sub("test-google-sub-1")
+    assert user is not None
+
+    # Persist a garment-invalid analysis directly — mirrors what the pipeline
+    # writes when garment_analysis.is_garment == False.
+    a = Analysis(
+        id=uuid4(),
+        user_id=user.id,
+        garment_image_ref="invalid.jpg",
+        recommended_size=None,        # ← the garment-invalid signal
+        recommended_confidence=None,
+        risk_level=None,
+        formatted_response={
+            "recommended_size": None,
+            "confidence_score": None,
+            "explanation_tr": "Yüklenen görselde tanınabilir bir kıyafet bulunamadı.",
+            "risk_level": None,
+            "risk_factors_tr": [],
+            "community_insights_tr": [],
+        },
+    )
+    db_session.add(a)
+    db_session.commit()
+    db_session.refresh(a)
+
+    # All 5 chip phrasings must route to the polite refusal — never to a
+    # cohort lookup or a Gemini call that would invent content.
+    for q in ("bu büyük mü?", "kumaş terletir mi?", "bu kalıp geniş mi?",
+              "benzer kullanıcılar ne yaşamış?", "neden iade etmişler?"):
+        r = _post_qa(client, auth_headers, str(a.id), q)
+        assert r.status_code == 200, (q, r.text)
+        body = r.json()
+        assert body["intent"] == "unsupported"
+        assert body["confidence_band"] == "low"
+        assert body["evidence_tr"] == []
+        # Refusal message must mention "kıyafet" — content stays stable.
+        assert "kıyafet" in body["answer_tr"].lower()

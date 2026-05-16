@@ -66,3 +66,37 @@ def test_cohort_low_band_suppresses_pct_and_reasons(client, auth_headers):
     if body["confidence_band"] == "low":
         assert body["returned_pct"] is None
         assert body["top_reasons"] == []
+
+
+def test_cohort_returns_empty_when_analysis_is_garment_invalid(
+    client, auth_headers, db_session,
+):
+    from uuid import uuid4
+    from app.models.analysis import Analysis
+    from app.repositories.users import UserRepository
+
+    _onboard(client, auth_headers)
+    user = UserRepository(db_session).get_by_google_sub("test-google-sub-1")
+    assert user is not None
+
+    a = Analysis(
+        id=uuid4(),
+        user_id=user.id,
+        garment_image_ref="invalid.jpg",
+        recommended_size=None,           # ← garment-invalid signal
+        formatted_response={
+            "recommended_size": None,
+            "explanation_tr": "Yüklenen görselde tanınabilir bir kıyafet bulunamadı.",
+        },
+    )
+    db_session.add(a)
+    db_session.commit()
+    db_session.refresh(a)
+
+    r = client.get(f"/api/v1/analyses/{a.id}/cohort", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["confidence_band"] == "low"
+    assert body["total"] == 0
+    assert body["returned_pct"] is None
+    assert body["top_reasons"] == []

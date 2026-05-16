@@ -46,10 +46,12 @@ def get_cohort_for_analysis(
     category = str(garment_meta.get("category", ""))
     tendency = str(garment_meta.get("brand_sizing_tendency", "standart"))
 
-    # Profile is required for the body-envelope filter — should always be set
-    # if the analysis itself was created, but guard anyway.
+    # Garment-invalid analyses lack a recommended_size — no useful cohort
+    # can be derived. Return an empty low-confidence response so the panel
+    # cleanly hides itself rather than firing meaningless aggregations.
     if (
-        current_user.height_cm is None
+        fr.get("recommended_size") is None
+        or current_user.height_cm is None
         or current_user.weight_kg is None
         or not category
     ):

@@ -3,8 +3,8 @@
 import { motion } from "framer-motion";
 
 export interface HeatmapRegion {
-  region: string;          // "omuz" | "kol" | "bel"
-  label_tr: string;        // "Omuz" / "Kol" / "Bel"
+  region: string;          // "omuz" | "kol" | "bel" | "kalca" | "bacak"
+  label_tr: string;
   status: "low" | "medium" | "high";
   reason_tr: string;
 }
@@ -33,19 +33,82 @@ const STATUS_PILL: Record<HeatmapRegion["status"], string> = {
   high: "text-danger bg-danger/10 border-danger/30",
 };
 
-function pick(
-  regions: HeatmapRegion[],
-  key: HeatmapRegion["region"],
-): HeatmapRegion | undefined {
-  return regions.find((r) => r.region === key);
+// Region key → SVG element(s). Returning a fragment lets a single region
+// paint multiple paths (e.g. both arms for "kol", both legs for "bacak").
+// The mannequin is the same full body regardless of garment category; only
+// the highlighted regions change.
+function renderRegion(
+  region: HeatmapRegion["region"],
+  status: HeatmapRegion["status"],
+): React.ReactNode {
+  const fill = STATUS_FILL[status];
+  switch (region) {
+    case "omuz":
+      // Top of torso — under the neck, above the chest line
+      return (
+        <path
+          d="M60 78 Q72 66 92 64 L108 64 Q128 66 140 78 L144 100 L56 100 Z"
+          fill={fill}
+          stroke="none"
+        />
+      );
+    case "kol":
+      // Both arms
+      return (
+        <>
+          <path
+            d="M60 78 L46 110 L52 145 L62 152 L62 100 Z"
+            fill={fill}
+            stroke="none"
+          />
+          <path
+            d="M140 78 L154 110 L148 145 L138 152 L138 100 Z"
+            fill={fill}
+            stroke="none"
+          />
+        </>
+      );
+    case "bel":
+      // Middle torso band — waistline area
+      return (
+        <path
+          d="M56 110 L144 110 L146 140 Q146 145 138 152 L62 152 Q54 145 54 140 Z"
+          fill={fill}
+          stroke="none"
+        />
+      );
+    case "kalca":
+      // Hip block — below waist, just above legs
+      return (
+        <path
+          d="M62 152 L138 152 L142 178 Q142 184 132 188 L68 188 Q58 184 58 178 Z"
+          fill={fill}
+          stroke="none"
+        />
+      );
+    case "bacak":
+      // Both legs — from hip to ankle
+      return (
+        <>
+          <path
+            d="M68 188 L62 260 L78 260 L84 188 Z"
+            fill={fill}
+            stroke="none"
+          />
+          <path
+            d="M116 188 L122 260 L138 260 L132 188 Z"
+            fill={fill}
+            stroke="none"
+          />
+        </>
+      );
+    default:
+      return null;
+  }
 }
 
 export function BodyHeatmap({ regions }: { regions: HeatmapRegion[] }) {
   if (!regions || regions.length === 0) return null;
-
-  const omuz = pick(regions, "omuz");
-  const kol  = pick(regions, "kol");
-  const bel  = pick(regions, "bel");
 
   return (
     <motion.div
@@ -64,7 +127,7 @@ export function BodyHeatmap({ regions }: { regions: HeatmapRegion[] }) {
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-[1fr_1.1fr]">
-        {/* Mannequin with colored regions */}
+        {/* Mannequin — always full body, regions colored only when present */}
         <div className="relative mx-auto aspect-[3/4] w-full max-w-[260px]">
           <svg viewBox="0 0 200 280" className="h-full w-full" aria-hidden>
             <defs>
@@ -74,67 +137,42 @@ export function BodyHeatmap({ regions }: { regions: HeatmapRegion[] }) {
               </linearGradient>
             </defs>
 
+            {/* Region fills first — outlines drawn on top */}
+            {regions.map((r) => (
+              <g key={`fill-${r.region}`}>{renderRegion(r.region, r.status)}</g>
+            ))}
+
             {/* Head */}
-            <circle
-              cx="100"
-              cy="32"
-              r="20"
-              fill="none"
-              stroke="url(#hm-stroke)"
-              strokeWidth="1"
-            />
+            <circle cx="100" cy="32" r="20" fill="none"
+                    stroke="url(#hm-stroke)" strokeWidth="1" />
 
             {/* Neck */}
-            <path
-              d="M93 50 L107 50 L108 62 L92 62 Z"
-              fill="none"
-              stroke="url(#hm-stroke)"
-              strokeWidth="0.8"
-            />
+            <path d="M93 50 L107 50 L108 62 L92 62 Z" fill="none"
+                  stroke="url(#hm-stroke)" strokeWidth="0.8" />
 
-            {/* Torso outline (transparent — for context only) */}
+            {/* Torso outline */}
             <path
               d="M60 78 Q72 66 92 64 L108 64 Q128 66 140 78 L146 130 Q146 145 138 152 L62 152 Q54 145 54 130 Z"
-              fill="none"
-              stroke="url(#hm-stroke)"
-              strokeWidth="0.9"
+              fill="none" stroke="url(#hm-stroke)" strokeWidth="0.9"
             />
 
-            {/* Omuz fill — top of torso */}
-            {omuz && (
-              <path
-                d="M60 78 Q72 66 92 64 L108 64 Q128 66 140 78 L144 100 L56 100 Z"
-                fill={STATUS_FILL[omuz.status]}
-                stroke="none"
-              />
-            )}
+            {/* Arm outlines */}
+            <path d="M60 78 L46 110 L52 145 L62 152" fill="none"
+                  stroke="url(#hm-stroke)" strokeWidth="0.9" />
+            <path d="M140 78 L154 110 L148 145 L138 152" fill="none"
+                  stroke="url(#hm-stroke)" strokeWidth="0.9" />
 
-            {/* Bel fill — middle band of torso */}
-            {bel && (
-              <path
-                d="M56 110 L144 110 L146 140 Q146 145 138 152 L62 152 Q54 145 54 140 Z"
-                fill={STATUS_FILL[bel.status]}
-                stroke="none"
-              />
-            )}
-
-            {/* Arms */}
+            {/* Hip outline */}
             <path
-              d="M60 78 L46 110 L52 145 L62 152"
-              fill={kol ? STATUS_FILL[kol.status] : "none"}
-              stroke="url(#hm-stroke)"
-              strokeWidth="0.9"
-            />
-            <path
-              d="M140 78 L154 110 L148 145 L138 152"
-              fill={kol ? STATUS_FILL[kol.status] : "none"}
-              stroke="url(#hm-stroke)"
-              strokeWidth="0.9"
+              d="M62 152 L138 152 L142 178 Q142 184 132 188 L68 188 Q58 184 58 178 Z"
+              fill="none" stroke="url(#hm-stroke)" strokeWidth="0.9"
             />
 
-            {/* Legs */}
-            <path d="M62 152 L75 260" fill="none" stroke="url(#hm-stroke)" strokeWidth="0.9" />
-            <path d="M138 152 L125 260" fill="none" stroke="url(#hm-stroke)" strokeWidth="0.9" />
+            {/* Leg outlines */}
+            <path d="M68 188 L62 260 L78 260 L84 188 Z" fill="none"
+                  stroke="url(#hm-stroke)" strokeWidth="0.9" />
+            <path d="M116 188 L122 260 L138 260 L132 188 Z" fill="none"
+                  stroke="url(#hm-stroke)" strokeWidth="0.9" />
           </svg>
         </div>
 

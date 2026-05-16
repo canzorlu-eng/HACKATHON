@@ -371,6 +371,12 @@ def _compute_risk_heatmap(
     """Derive per-body-region risk status from upstream analysis data.
 
     Returns a list of {"region", "label_tr", "status", "reason_tr"} dicts.
+    The region set depends on the garment category:
+      - shirt/tshirt/jacket → omuz, kol, bel  (upper body)
+      - jeans               → bel, kalca, bacak  (lower body)
+      - dress               → omuz, bel, kalca  (full silhouette)
+      - other / unknown     → falls back to upper-body set
+
     Without a body image, body-shape-dependent regions are capped at
     "medium" — we don't claim "high" on data we don't have.
     """
@@ -378,6 +384,7 @@ def _compute_risk_heatmap(
     shoulder_est  = body.get("shoulder_width_estimate", "standart")
     fabric        = (garment.get("fabric_cues") or "").lower()
     brand         = garment.get("brand_sizing_tendency", "standart")
+    category      = (garment.get("category") or "").lower()
 
     try:
         bmi = weight_kg / ((height_cm / 100) ** 2) if height_cm else 22.0
@@ -389,34 +396,39 @@ def _compute_risk_heatmap(
             return _REGION_MEDIUM
         return status
 
+    if category == "jeans":
+        return _heatmap_lower_body(fit_type, brand, fabric, bmi, cap)
+    if category == "dress":
+        return _heatmap_dress(fit_type, brand, shoulder_est, fabric, bmi, cap)
+    # shirt / tshirt / jacket / coat / fallback
+    return _heatmap_upper_body(fit_type, brand, shoulder_est, fabric, bmi, cap)
+
+
+def _heatmap_upper_body(fit_type, brand, shoulder_est, fabric, bmi, cap):
     regions: list[dict] = []
 
     # ── Omuz ─────────────────────────────────────────────
     if fit_type == "slim-cut" and shoulder_est == "geniş":
         regions.append({
-            "region": "omuz",
-            "label_tr": "Omuz",
+            "region": "omuz", "label_tr": "Omuz",
             "status": cap(_REGION_HIGH),
             "reason_tr": "Dar kesim ve geniş omuz tahmini birleşince omuz alanı sıkışabilir.",
         })
     elif fit_type == "slim-cut":
         regions.append({
-            "region": "omuz",
-            "label_tr": "Omuz",
+            "region": "omuz", "label_tr": "Omuz",
             "status": _REGION_MEDIUM,
             "reason_tr": "Slim-cut kesim — omuz hareket alanı sınırlı olabilir.",
         })
     elif brand == "küçük kalıplı":
         regions.append({
-            "region": "omuz",
-            "label_tr": "Omuz",
+            "region": "omuz", "label_tr": "Omuz",
             "status": _REGION_MEDIUM,
             "reason_tr": "Marka küçük kalıplı — omuzlarda darlık olabilir.",
         })
     else:
         regions.append({
-            "region": "omuz",
-            "label_tr": "Omuz",
+            "region": "omuz", "label_tr": "Omuz",
             "status": _REGION_LOW,
             "reason_tr": "Omuz alanında belirgin bir risk yok.",
         })
@@ -424,29 +436,25 @@ def _compute_risk_heatmap(
     # ── Kol ──────────────────────────────────────────────
     if brand == "küçük kalıplı" and fit_type in ("slim-cut", "regular"):
         regions.append({
-            "region": "kol",
-            "label_tr": "Kol",
+            "region": "kol", "label_tr": "Kol",
             "status": cap(_REGION_HIGH),
             "reason_tr": "Küçük kalıplı marka + dar kollu kesim — kol darlığı riski.",
         })
     elif fit_type == "slim-cut":
         regions.append({
-            "region": "kol",
-            "label_tr": "Kol",
+            "region": "kol", "label_tr": "Kol",
             "status": _REGION_MEDIUM,
             "reason_tr": "Slim-cut kollar hareket konforunu sınırlayabilir.",
         })
     elif fit_type in ("relaxed", "oversize"):
         regions.append({
-            "region": "kol",
-            "label_tr": "Kol",
+            "region": "kol", "label_tr": "Kol",
             "status": _REGION_LOW,
             "reason_tr": "Rahat kesim kollar — hareket konforu yüksek.",
         })
     else:
         regions.append({
-            "region": "kol",
-            "label_tr": "Kol",
+            "region": "kol", "label_tr": "Kol",
             "status": _REGION_LOW,
             "reason_tr": "Kol kesimi profile uyumlu.",
         })
@@ -455,31 +463,187 @@ def _compute_risk_heatmap(
     thin_fabric = any(k in fabric for k in ("ince", "kaygan", "saten"))
     if thin_fabric and bmi > 25:
         regions.append({
-            "region": "bel",
-            "label_tr": "Bel",
+            "region": "bel", "label_tr": "Bel",
             "status": cap(_REGION_HIGH),
             "reason_tr": "İnce kumaş + yüksek BMI — bel hattı daha belirgin görünebilir.",
         })
     elif fit_type == "slim-cut" and bmi > 24:
         regions.append({
-            "region": "bel",
-            "label_tr": "Bel",
+            "region": "bel", "label_tr": "Bel",
             "status": _REGION_MEDIUM,
             "reason_tr": "Slim-cut + BMI birleşimi — bel rahatlığı düşebilir.",
         })
     elif fit_type in ("relaxed", "oversize"):
         regions.append({
-            "region": "bel",
-            "label_tr": "Bel",
+            "region": "bel", "label_tr": "Bel",
             "status": _REGION_LOW,
             "reason_tr": "Bol kesim bel hattına basınç yapmaz.",
         })
     else:
         regions.append({
-            "region": "bel",
-            "label_tr": "Bel",
+            "region": "bel", "label_tr": "Bel",
             "status": _REGION_LOW,
             "reason_tr": "Bel alanında belirgin bir risk yok.",
+        })
+
+    return regions
+
+
+def _heatmap_lower_body(fit_type, brand, fabric, bmi, cap):
+    """Jeans / pantolon regions: bel (waistband), kalca (hip), bacak (leg)."""
+    regions: list[dict] = []
+
+    # ── Bel (waistband) ──────────────────────────────────
+    if brand == "küçük kalıplı" and bmi > 24:
+        regions.append({
+            "region": "bel", "label_tr": "Bel",
+            "status": cap(_REGION_HIGH),
+            "reason_tr": "Küçük kalıplı marka + BMI birleşimi — bel bandı sıkı kalabilir.",
+        })
+    elif fit_type == "slim-cut" and bmi > 24:
+        regions.append({
+            "region": "bel", "label_tr": "Bel",
+            "status": _REGION_MEDIUM,
+            "reason_tr": "Slim kesim — bel bandı dar oturabilir.",
+        })
+    elif fit_type in ("relaxed", "oversize"):
+        regions.append({
+            "region": "bel", "label_tr": "Bel",
+            "status": _REGION_LOW,
+            "reason_tr": "Rahat kesim — bel rahat oturur.",
+        })
+    else:
+        regions.append({
+            "region": "bel", "label_tr": "Bel",
+            "status": _REGION_LOW,
+            "reason_tr": "Bel oturuşu standart.",
+        })
+
+    # ── Kalça ────────────────────────────────────────────
+    rigid_fabric = any(k in fabric for k in ("sert", "kalın", "rigid", "esnek değil"))
+    if fit_type == "slim-cut" and (bmi > 25 or rigid_fabric):
+        regions.append({
+            "region": "kalca", "label_tr": "Kalça",
+            "status": cap(_REGION_HIGH),
+            "reason_tr": "Slim kesim + esnemeyen kumaş — kalça bölgesi sıkışabilir.",
+        })
+    elif fit_type == "slim-cut":
+        regions.append({
+            "region": "kalca", "label_tr": "Kalça",
+            "status": _REGION_MEDIUM,
+            "reason_tr": "Slim kesim — kalça hareket alanı sınırlı olabilir.",
+        })
+    elif fit_type == "oversize":
+        regions.append({
+            "region": "kalca", "label_tr": "Kalça",
+            "status": _REGION_LOW,
+            "reason_tr": "Oversize kesim — kalça bölgesi rahat.",
+        })
+    else:
+        regions.append({
+            "region": "kalca", "label_tr": "Kalça",
+            "status": _REGION_LOW,
+            "reason_tr": "Kalça oturuşu profile uyumlu.",
+        })
+
+    # ── Bacak ────────────────────────────────────────────
+    if fit_type == "slim-cut":
+        regions.append({
+            "region": "bacak", "label_tr": "Bacak",
+            "status": _REGION_MEDIUM,
+            "reason_tr": "Slim / skinny kesim — bacak boyu kısa veya dar gelebilir.",
+        })
+    elif fit_type == "oversize":
+        regions.append({
+            "region": "bacak", "label_tr": "Bacak",
+            "status": _REGION_LOW,
+            "reason_tr": "Bol paça — bacak hareketi rahat.",
+        })
+    elif brand == "küçük kalıplı":
+        regions.append({
+            "region": "bacak", "label_tr": "Bacak",
+            "status": _REGION_MEDIUM,
+            "reason_tr": "Küçük kalıplı marka — boy kısa kalma riski.",
+        })
+    else:
+        regions.append({
+            "region": "bacak", "label_tr": "Bacak",
+            "status": _REGION_LOW,
+            "reason_tr": "Bacak kesimi standart.",
+        })
+
+    return regions
+
+
+def _heatmap_dress(fit_type, brand, shoulder_est, fabric, bmi, cap):
+    """Dress regions: omuz, bel, kalca — full silhouette read."""
+    regions: list[dict] = []
+
+    # ── Omuz ─────────────────────────────────────────────
+    if shoulder_est == "geniş" and fit_type in ("slim-cut", "regular"):
+        regions.append({
+            "region": "omuz", "label_tr": "Omuz",
+            "status": cap(_REGION_HIGH),
+            "reason_tr": "Geniş omuz tahmini + dar kesim — askı veya yaka sıkışabilir.",
+        })
+    elif fit_type == "slim-cut":
+        regions.append({
+            "region": "omuz", "label_tr": "Omuz",
+            "status": _REGION_MEDIUM,
+            "reason_tr": "Slim kesim elbise — omuz ve yaka hareketini sınırlayabilir.",
+        })
+    else:
+        regions.append({
+            "region": "omuz", "label_tr": "Omuz",
+            "status": _REGION_LOW,
+            "reason_tr": "Omuz / yaka bölgesinde belirgin risk yok.",
+        })
+
+    # ── Bel ──────────────────────────────────────────────
+    thin_fabric = any(k in fabric for k in ("ince", "kaygan", "saten"))
+    if (fit_type == "slim-cut" or thin_fabric) and bmi > 24:
+        regions.append({
+            "region": "bel", "label_tr": "Bel",
+            "status": cap(_REGION_HIGH),
+            "reason_tr": "Dar kesim veya ince kumaş + BMI — bel hattı belirginleşir.",
+        })
+    elif fit_type in ("relaxed", "oversize"):
+        regions.append({
+            "region": "bel", "label_tr": "Bel",
+            "status": _REGION_LOW,
+            "reason_tr": "Bol kesim — bel rahat.",
+        })
+    else:
+        regions.append({
+            "region": "bel", "label_tr": "Bel",
+            "status": _REGION_LOW,
+            "reason_tr": "Bel oturuşu standart.",
+        })
+
+    # ── Kalça ────────────────────────────────────────────
+    if fit_type == "slim-cut" and bmi > 25:
+        regions.append({
+            "region": "kalca", "label_tr": "Kalça",
+            "status": cap(_REGION_HIGH),
+            "reason_tr": "Slim kesim elbise — kalça hattı dar oturabilir.",
+        })
+    elif fit_type == "slim-cut":
+        regions.append({
+            "region": "kalca", "label_tr": "Kalça",
+            "status": _REGION_MEDIUM,
+            "reason_tr": "Slim kesim — kalça hareketi sınırlanabilir.",
+        })
+    elif fit_type in ("relaxed", "oversize"):
+        regions.append({
+            "region": "kalca", "label_tr": "Kalça",
+            "status": _REGION_LOW,
+            "reason_tr": "Bol kesim — kalça rahat.",
+        })
+    else:
+        regions.append({
+            "region": "kalca", "label_tr": "Kalça",
+            "status": _REGION_LOW,
+            "reason_tr": "Kalça oturuşu profile uyumlu.",
         })
 
     return regions
