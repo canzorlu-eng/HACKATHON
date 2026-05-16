@@ -116,6 +116,9 @@ def enrich_row(row: dict, garments: dict[str, dict]) -> dict:
     garment = garments.get(str(row.get("garment_id", "")), {})
     fabric   = str(garment.get("fabric", ""))
     category = str(garment.get("category", ""))
+    fit_type = str(garment.get("fit_type", ""))
+    out["category"] = category
+    out["fit_type"] = fit_type
     out["fabric_breathability"] = breathability_for(fabric)
     out["season_fit"] = season_fit_for(fabric, category)
 

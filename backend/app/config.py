@@ -32,6 +32,14 @@ class Settings(BaseSettings):
 
     demo_mode: bool = Field(default=False)
 
+    # Off by default — deterministic verdict_tr from the fact collectors is
+    # the primary response path. When true, the /qa endpoint runs an optional
+    # Gemini narrative-rewrite pass that is presentation-only: it cannot
+    # change facts, sizes, or percentages. Any rewrite containing a number
+    # absent from the deterministic verdict is rejected by the honesty rail
+    # in app.ai.qa_narrative and we fall back to the deterministic answer.
+    enable_gemini_narrative: bool = Field(default=False)
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

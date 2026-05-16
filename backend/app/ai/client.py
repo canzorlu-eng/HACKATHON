@@ -51,6 +51,12 @@ class AIClient(Protocol):
         review_stats: dict,
     ) -> dict: ...
 
+    async def compose_qa_narrative(
+        self,
+        facts: dict,
+        deterministic_verdict_tr: str,
+    ) -> dict: ...
+
 
 # ---------------------------------------------------------------------------
 # Mock client — fully deterministic, no network calls
@@ -195,6 +201,19 @@ class MockAIClient:
             narrative += f" {stat_note}"
         narrative += f" Genel risk değerlendirmesi: {risk_tr.lower()}."
         return {"detailed_explanation_tr": narrative}
+
+    async def compose_qa_narrative(
+        self,
+        facts: dict,
+        deterministic_verdict_tr: str,
+    ) -> dict:
+        """Mock: pass the deterministic verdict through unchanged.
+
+        Tests use this; DEMO_MODE also uses this. With the flag on but
+        Mock active, the validator sees no change → accepts → user sees
+        the same answer they'd see with the flag off. That's the safe
+        default."""
+        return {"answer_tr": deterministic_verdict_tr}
 
 
 # ---------------------------------------------------------------------------
@@ -358,6 +377,38 @@ LANGUAGE: every prose string value (cut_notes, fabric_cues, uncertainty_reason) 
 Keep `category` and `fit_type` as the English tokens above — they are enum keys, not user-facing text."""
 
 
+# QA narrative wrap — presentation-only rewrite of a deterministic verdict.
+# The strict contract: never invent numbers, never change a recommendation,
+# never add or remove facts. Output is a single short Turkish paragraph.
+# Validation against the deterministic verdict happens in app.ai.qa_narrative.
+_QA_NARRATIVE_PROMPT = """\
+Sen HIWALOY için Türkçe yanıtları daha akıcı hale getiren bir editörsün.
+
+Görev: Aşağıdaki DETERMINISTIC_VERDICT cümlesini 2-3 cümlelik daha doğal
+Türkçe paragrafa dönüştür. Sadece okunabilirliği iyileştir.
+
+KESİN KURALLAR (ihlal halinde cevabın reddedilir):
+1. DETERMINISTIC_VERDICT içinde olmayan hiçbir sayı, yüzde veya sayım ekleme.
+2. Önerilen beden, kalıp veya marka eğilimini DEĞİŞTİRME — birebir koru.
+3. Kıyafet, kumaş veya kullanıcı özelliği UYDURMA.
+4. Övgü, güzellik veya stil yorumu EKLEME — bunlar HIWALOY kapsamı dışı.
+5. Türkçe yaz; İngilizce ifade kullanma.
+6. 3 cümleden uzun yazma.
+7. "Yeterli veri yok" cümlesi varsa onu kaldırma.
+
+Veri:
+DETERMINISTIC_VERDICT (rewrite this):
+{verdict_tr}
+
+FACTS (read-only, may inform phrasing but cannot introduce new claims):
+{facts_json}
+
+Sadece JSON döndür, markdown yok:
+{{
+  "answer_tr": "Türkçe paragraf"
+}}"""
+
+
 class RealGeminiClient:
     def __init__(self, api_key: str, model: str = "gemini-3.1-flash-lite") -> None:
         import google.generativeai as genai
@@ -488,6 +539,35 @@ class RealGeminiClient:
             history_summary=json.dumps(history, ensure_ascii=False),
             query=query,
             catalog_json=json.dumps(shortlist, ensure_ascii=False),
+        )
+        response = model.generate_content(
+            [prompt],
+            generation_config=self._genai.GenerationConfig(
+                response_mime_type="application/json",
+                temperature=0.2,
+            ),
+        )
+        return self._parse(response.text)
+
+    async def compose_qa_narrative(
+        self,
+        facts: dict,
+        deterministic_verdict_tr: str,
+    ) -> dict:
+        import asyncio
+        return await asyncio.to_thread(
+            self._compose_qa_narrative_sync, facts, deterministic_verdict_tr,
+        )
+
+    def _compose_qa_narrative_sync(
+        self,
+        facts: dict,
+        deterministic_verdict_tr: str,
+    ) -> dict:
+        model = self._make_model()
+        prompt = _QA_NARRATIVE_PROMPT.format(
+            verdict_tr=deterministic_verdict_tr,
+            facts_json=json.dumps(facts, ensure_ascii=False),
         )
         response = model.generate_content(
             [prompt],

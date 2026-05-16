@@ -127,19 +127,32 @@ def review_retriever_node(state: PipelineState) -> dict:
     Falls back to curated placeholder insights when the service is unavailable
     or returns no relevant results.  The retrieval status is stored in
     ``review_retrieval_status`` so downstream nodes and tests can inspect it.
+
+    Derives season_fit + fabric_breathability from the garment_analysis
+    fabric_cues field using the shared fabric_rules — same rules the
+    catalog and review enrichment use, so filters compose cleanly with
+    the Chroma metadata.
     """
+    from app.services.fabric_rules import breathability_for, season_fit_for
     from app.services.review_service import get_review_service
 
     garment  = state.get("garment_analysis") or {}
     category = garment.get("category", "")
     fit_type = garment.get("fit_type", "regular")
     brand    = garment.get("brand_sizing_tendency", "standart")
+    fabric_cues = garment.get("fabric_cues", "") or ""
+    season_fit  = season_fit_for(fabric_cues, category)
+    breathability = breathability_for(fabric_cues)
 
     service = get_review_service()
 
     if service is not None:
         try:
-            result = service.query(category, fit_type, brand)
+            result = service.query(
+                category, fit_type, brand,
+                season_fit=season_fit,
+                fabric_breathability=breathability,
+            )
             if result.status == "ok":
                 logger.info(
                     "review_retriever source=chroma insights=%d category=%s",

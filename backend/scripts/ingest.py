@@ -131,6 +131,8 @@ def ingest(
             # Enriched fields — present when reviews_enriched.jsonl is used.
             "returned":              str(r.get("returned", False)),
             "return_reason":         str(r.get("return_reason") or ""),
+            "category":              str(r.get("category") or ""),
+            "fit_type":              str(r.get("fit_type") or ""),
             "fabric_breathability":  str(r.get("fabric_breathability") or "medium"),
             "season_fit":            str(r.get("season_fit") or "all_season"),
         }

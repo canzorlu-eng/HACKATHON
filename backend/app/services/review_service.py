@@ -219,18 +219,66 @@ class ReviewIntelligenceService:
 
     # ------------------------------------------------------------------
 
+    # ── Where-clause helpers ────────────────────────────────────────
+
+    @staticmethod
+    def _build_where(filters: dict) -> dict | None:
+        """Compose a Chroma where dict from non-empty filter values.
+        Returns None when no clauses apply, so the caller can omit
+        the kwarg entirely (some Chroma versions reject an empty $and).
+        """
+        clauses: list[dict] = []
+        for k, v in filters.items():
+            if v is None or v == "":
+                continue
+            clauses.append({k: {"$eq": str(v)}})
+        if not clauses:
+            return None
+        if len(clauses) == 1:
+            return clauses[0]
+        return {"$and": clauses}
+
+    def _query_chroma(self, query_text: str, n: int,
+                      where: dict | None) -> dict:
+        col = self._collection()
+        kwargs = dict(
+            query_texts=[query_text],
+            n_results=n,
+            include=["documents", "metadatas", "distances"],
+        )
+        if where is not None:
+            kwargs["where"] = where
+        return col.query(**kwargs)
+
+    # ── Main query path ─────────────────────────────────────────────
+
     def query(
         self,
         category: str,
         fit_type: str,
         brand_tendency: str,
         *,
+        season_fit: str | None = None,
+        fabric_breathability: str | None = None,
         min_relevance: float = _DEFAULT_MIN_RELEVANCE,
         max_results:   int   = _DEFAULT_MAX_RESULTS,
         dedup_threshold: float = _DEFAULT_DEDUP_THRESHOLD,
     ) -> ReviewIntelligenceResult:
         """
         Run the full RAG pipeline for review intelligence.
+
+        Filters are applied as a Chroma metadata `where` clause with tiered
+        relaxation when a strict filter produces no candidates. Order of
+        relaxation (most restrictive dropped first):
+
+            1) category + fit_type + season_fit + fabric_breathability
+            2) drop fabric_breathability
+            3) drop season_fit
+            4) drop fit_type   (category-only)
+            5) no metadata filter (semantic similarity only — original behavior)
+
+        This keeps deterministic, grounded retrieval as the default while
+        preserving demo stability when the metadata corpus is sparse.
 
         Returns a ReviewIntelligenceResult with status:
           "empty"          – collection has no documents
@@ -248,21 +296,53 @@ class ReviewIntelligenceService:
                 message_tr="Henüz yeterli kullanıcı yorumu bulunmuyor.",
             )
 
-        # ── 2. Query ─────────────────────────────────────────────────
+        # ── 2. Tiered query — drop one filter per attempt until non-empty ─
         n = min(max_results, total_docs)
         query_text = (
             f"{category} {fit_type} {brand_tendency} "
             "beden uyum kalıp kesiyor"
         )
-        raw = col.query(
-            query_texts=[query_text],
-            n_results=n,
-            include=["documents", "metadatas", "distances"],
-        )
 
-        docs      = (raw.get("documents") or [[]])[0]
-        metas     = (raw.get("metadatas") or [[]])[0]
-        distances = (raw.get("distances")  or [[]])[0]
+        # Tiers are evaluated top-down. The first one yielding any results wins.
+        tiers: list[tuple[str, dict]] = [
+            ("strict",            {"category": category, "fit_type": fit_type,
+                                   "season_fit": season_fit,
+                                   "fabric_breathability": fabric_breathability}),
+            ("drop_breath",       {"category": category, "fit_type": fit_type,
+                                   "season_fit": season_fit}),
+            ("drop_season",       {"category": category, "fit_type": fit_type}),
+            ("category_only",     {"category": category}),
+            ("no_filter",         {}),
+        ]
+
+        docs: list = []
+        metas: list = []
+        distances: list = []
+        tier_used = "no_filter"
+
+        for tier_name, filters in tiers:
+            where = self._build_where(filters)
+            try:
+                raw = self._query_chroma(query_text, n, where)
+            except Exception as exc:
+                # Some Chroma versions reject unknown metadata keys when the
+                # corpus pre-dates the new fields. Treat as empty and relax.
+                logger.debug("review_service tier=%s rejected: %s",
+                             tier_name, type(exc).__name__)
+                continue
+            docs      = (raw.get("documents") or [[]])[0]
+            metas     = (raw.get("metadatas") or [[]])[0]
+            distances = (raw.get("distances")  or [[]])[0]
+            if docs:
+                tier_used = tier_name
+                break
+
+        logger.info(
+            "review_service tier=%s retrieved=%d category=%s fit_type=%s "
+            "season=%s breath=%s",
+            tier_used, len(docs), category, fit_type, season_fit,
+            fabric_breathability,
+        )
 
         # ── 3. Relevance filter ──────────────────────────────────────
         # ChromaDB cosine distance: 0 = identical, 2 = opposite.
@@ -378,11 +458,17 @@ class _DemoCollection:
     def count(self) -> int:
         return len(self._docs)
 
-    def query(self, query_texts, n_results, include):  # noqa: ARG002
+    def query(self, query_texts, n_results, include, where=None):  # noqa: ARG002
         query = (query_texts[0] if query_texts else "").lower()
         q_tokens = set(query.split())
+
+        # Apply metadata filter — match Chroma's $eq / $and dialect so the
+        # demo path exercises the exact same tiered-fallback contract as
+        # production. Unknown operators silently match.
+        filtered = [d for d in self._docs if _where_matches(d["meta"], where)]
+
         scored: list[tuple[float, dict]] = []
-        for d in self._docs:
+        for d in filtered:
             text_tokens = set(d["text"].lower().split())
             theme_tokens = set((d["meta"].get("themes") or "").lower().replace(",", " ").split())
             tokens = text_tokens | theme_tokens
@@ -397,6 +483,24 @@ class _DemoCollection:
             "metadatas": [[d["meta"] for _, d in sample]],
             "distances": [[1.0 - sim for sim, _ in sample]],
         }
+
+
+def _where_matches(meta: dict, where: dict | None) -> bool:
+    """Tiny subset of Chroma's `where` dialect: $eq, $and, top-level eq.
+    Used by _DemoCollection so the demo path applies the same filters
+    real production sees."""
+    if not where:
+        return True
+    if "$and" in where:
+        return all(_where_matches(meta, sub) for sub in where["$and"])
+    for key, cond in where.items():
+        if isinstance(cond, dict):
+            if "$eq" in cond and str(meta.get(key, "")) != str(cond["$eq"]):
+                return False
+        else:
+            if str(meta.get(key, "")) != str(cond):
+                return False
+    return True
 
 
 def _make_demo_service() -> ReviewIntelligenceService:
