@@ -30,7 +30,7 @@ The goal is to reduce wrong-size purchases, fit mismatch, return rates, and the 
 |-------|------------|
 | Frontend | Next.js 14 (App Router) · TailwindCSS · shadcn/ui · Framer Motion · NextAuth (Google) |
 | Backend | FastAPI (Python 3.11) · SQLModel · python-jose |
-| AI pipeline | LangGraph · **Gemini 3.1 Flash Lite (multimodal, live by default)** · Gemini text-embedding-004 |
+| AI pipeline | LangGraph · **Gemini 3.1 Flash Lite (multimodal, live by default)** · Gemini gemini-embedding-001 |
 | Vector store | ChromaDB |
 | Database | PostgreSQL 16 |
 | Containers | Docker · Docker Compose |
@@ -106,7 +106,7 @@ Copy `.env.example` → `.env` and adjust. **Never commit `.env`.**
 | **`DEMO_MODE`** | **`false`** | No | **Default is `false` — the app runs against the real Gemini API (not `MockAIClient`).** Set `true` only if you want the deterministic `MockAIClient` + in-memory ChromaDB seed for offline demos. |
 | **`GEMINI_API_KEY`** | *(empty)* | **Yes (default path)** | Google AI Studio API key. Required because `DEMO_MODE=false` is the default — every multimodal call (`analyzer`, `narrative_composer`, `/stilist`) hits Gemini 3.1 Flash Lite. |
 | `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Yes | Multimodal model used by analyzer + narrative_composer + stylist. |
-| `EMBEDDING_MODEL` | *(empty)* | No | Set to `text-embedding-004` to route Chroma queries through Gemini embeddings (else MiniLM via Chroma default). |
+| `EMBEDDING_MODEL` | *(empty)* | No | Set to `gemini-embedding-001` to route Chroma queries through Gemini embeddings (else MiniLM via Chroma default). |
 | `ENABLE_GEMINI_NARRATIVE` | `false` | No | Opt-in Gemini polish over the deterministic QA answer. See **QA composition** below. |
 | `NEXTAUTH_SECRET` | *(empty)* | Yes | Shared HS256 secret. Frontend signs Bearer tokens, backend verifies. Must match between the two. |
 | `POSTGRES_PASSWORD` | `hiwaloy_local` | Yes | |
@@ -170,7 +170,7 @@ HACKATHON/
 │   │   │   ├── nodes.py                 7 LangGraph pipeline nodes + heatmap dispatch
 │   │   │   ├── graph.py                 LangGraph StateGraph wiring
 │   │   │   ├── state.py                 PipelineState TypedDict
-│   │   │   ├── embeddings.py            Gemini text-embedding-004 adapter
+│   │   │   ├── embeddings.py            Gemini gemini-embedding-001 adapter
 │   │   │   ├── qa_intent.py             Regex Turkish intent router (5 intents)
 │   │   │   ├── qa_facts.py              Deterministic fact collectors per intent
 │   │   │   └── qa_narrative.py          Optional Gemini polish + honesty validator
@@ -224,7 +224,7 @@ POST /api/v1/analyze
         │
         ▼
  review_retriever           ← ChromaDB cosine ≥ 0.30 + Jaccard dedup
-                              · Embeddings: Gemini text-embedding-004 (or MiniLM)
+                              · Embeddings: Gemini gemini-embedding-001 (or MiniLM)
                               · Metadata where-filter with tiered fallback:
                                 category → +fit_type → +season → +breathability
         │
@@ -268,7 +268,7 @@ Live Gemini is the default path (`DEMO_MODE=false`). The table below lists every
 |---|---|---|
 | `analyzer.analyze_body` | vision + Turkish JSON | always |
 | `analyzer.analyze_garment` | vision + Turkish JSON + is_garment gate | always |
-| `review_retriever` | `text-embedding-004` | only when `EMBEDDING_MODEL` is set |
+| `review_retriever` | `gemini-embedding-001` | only when `EMBEDDING_MODEL` is set |
 | `narrative_composer` | Gemini text | always — writes "Detaylı Analiz" card |
 | `/stilist` | `stylist_pick` — picks 3 from catalog | always |
 | `/qa` | optional polish via `compose_qa_narrative` | only when `ENABLE_GEMINI_NARRATIVE=true` (default OFF) |

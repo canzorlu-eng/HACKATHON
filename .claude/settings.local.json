@@ -57,7 +57,9 @@
       "PowerShell(\\(Get-Content \"C:\\\\Users\\\\zorlu\\\\OneDrive\\\\Desktop\\\\HACKATHON\\\\data\\\\reviews.jsonl\" | Measure-Object -Line\\).Lines)",
       "PowerShell($rows = Get-Content \"C:\\\\Users\\\\zorlu\\\\OneDrive\\\\Desktop\\\\HACKATHON\\\\data\\\\reviews.jsonl\" | ConvertFrom-Json; \"total=$\\($rows.Count\\) fits_true_false=$\\(\\($rows | Where-Object { $_.fits_true -eq $false }\\).Count\\) negative=$\\(\\($rows | Where-Object { $_.sentiment -eq 'negative' }\\).Count\\) returned_candidate=$\\(\\($rows | Where-Object { \\($_.fits_true -eq $false\\) -and \\($_.sentiment -eq 'negative'\\) }\\).Count\\)\")",
       "PowerShell(npm install *)",
-      "PowerShell(Push-Location frontend; Test-Path \"node_modules/next-auth\"; Test-Path \"node_modules/jsonwebtoken\"; \\(Get-ChildItem node_modules | Measure-Object\\).Count; Pop-Location)"
+      "PowerShell(Push-Location frontend; Test-Path \"node_modules/next-auth\"; Test-Path \"node_modules/jsonwebtoken\"; \\(Get-ChildItem node_modules | Measure-Object\\).Count; Pop-Location)",
+      "Bash(dir /a-d /b .env*)",
+      "Bash(dir /a-d /b README*)"
     ]
   },
   "enableAllProjectMcpServers": true,

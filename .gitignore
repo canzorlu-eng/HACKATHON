@@ -43,3 +43,5 @@ backend/app/data/.cache/
 .claude-flow/
 .swarm/
 ruvector.db
+
+.claude/
