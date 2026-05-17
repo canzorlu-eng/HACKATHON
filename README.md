@@ -30,8 +30,8 @@ The goal is to reduce wrong-size purchases, fit mismatch, return rates, and the 
 |-------|------------|
 | Frontend | Next.js 14 (App Router) · TailwindCSS · shadcn/ui · Framer Motion · NextAuth (Google) |
 | Backend | FastAPI (Python 3.11) · SQLModel · python-jose |
-| AI pipeline | LangGraph · Gemini 3.1 Flash Lite (multimodal) · Gemini text-embedding-004 |
-| Vector store | ChromaDB (in-memory seeded in DEMO_MODE) |
+| AI pipeline | LangGraph · **Gemini 3.1 Flash Lite (multimodal, live by default)** · Gemini text-embedding-004 |
+| Vector store | ChromaDB |
 | Database | PostgreSQL 16 |
 | Containers | Docker · Docker Compose |
 
@@ -44,7 +44,7 @@ The goal is to reduce wrong-size purchases, fit mismatch, return rates, and the 
 ```bash
 git clone <repo>
 cd HACKATHON
-cp .env.example .env        # defaults have DEMO_MODE=true
+cp .env.example .env        # default is DEMO_MODE=false → real Gemini is used
 ```
 
 Start the stack with the launcher for your OS (it disables Docker BuildKit, which trips on the dynamic Next.js route on some platforms):
@@ -83,9 +83,9 @@ npm run dev
 
 Open http://localhost:3000
 
-### First-run data prep (live mode only)
+### First-run data prep (live mode — default)
 
-When `DEMO_MODE=false`, the review corpus must be enriched and ingested into ChromaDB before similar-user panels can return real numbers:
+Because `DEMO_MODE=false` is the default, the review corpus **must** be enriched and ingested into ChromaDB before similar-user panels can return real numbers:
 
 ```bash
 cd backend
@@ -103,16 +103,16 @@ Copy `.env.example` → `.env` and adjust. **Never commit `.env`.**
 
 | Variable | Default | Required | Purpose |
 |----------|---------|----------|---------|
-| `DEMO_MODE` | `true` | No | Forces `MockAIClient` + in-memory ChromaDB seed. Set `false` for real Gemini. |
-| `GEMINI_API_KEY` | *(empty)* | Yes if `DEMO_MODE=false` | Google AI Studio API key. |
-| `GEMINI_MODEL` | `gemini-3.1-flash-lite` | No | Multimodal model used by analyzer + narrative_composer + stylist. |
+| **`DEMO_MODE`** | **`false`** | No | **Default is `false` — the app runs against the real Gemini API (not `MockAIClient`).** Set `true` only if you want the deterministic `MockAIClient` + in-memory ChromaDB seed for offline demos. |
+| **`GEMINI_API_KEY`** | *(empty)* | **Yes (default path)** | Google AI Studio API key. Required because `DEMO_MODE=false` is the default — every multimodal call (`analyzer`, `narrative_composer`, `/stilist`) hits Gemini 3.1 Flash Lite. |
+| `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Yes | Multimodal model used by analyzer + narrative_composer + stylist. |
 | `EMBEDDING_MODEL` | *(empty)* | No | Set to `text-embedding-004` to route Chroma queries through Gemini embeddings (else MiniLM via Chroma default). |
 | `ENABLE_GEMINI_NARRATIVE` | `false` | No | Opt-in Gemini polish over the deterministic QA answer. See **QA composition** below. |
 | `NEXTAUTH_SECRET` | *(empty)* | Yes | Shared HS256 secret. Frontend signs Bearer tokens, backend verifies. Must match between the two. |
 | `POSTGRES_PASSWORD` | `hiwaloy_local` | Yes | |
 | `POSTGRES_PORT` | `5433` | Yes | |
-| `CHROMA_HOST` | `localhost` | Yes if `DEMO_MODE=false` | |
-| `CHROMA_PORT` | `8001` | Yes if `DEMO_MODE=false` | |
+| `CHROMA_HOST` | `localhost` | Yes (default path) | Required because `DEMO_MODE=false` is the default — review retrieval queries a real ChromaDB instance. |
+| `CHROMA_PORT` | `8001` | Yes (default path) | Same as above. |
 | `BACKEND_PORT` | `8000` | Yes | |
 | `FRONTEND_PORT` | `3000` | Yes | |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | Yes | Baked into the Next.js build. |
@@ -120,17 +120,21 @@ Copy `.env.example` → `.env` and adjust. **Never commit `.env`.**
 
 ### DEMO_MODE
 
-When `DEMO_MODE=true`:
+**Default: `DEMO_MODE=false` — the app uses the real Gemini API.** The legacy `MockAIClient` path is only kept as an offline fallback for fully reproducible demos.
+
+When `DEMO_MODE=false` (default — what the app ships with):
+- `RealGeminiClient` is wired into the pipeline (no `MockAIClient`)
+- `GEMINI_API_KEY` is **required**
+- ChromaDB must be running at `CHROMA_HOST:CHROMA_PORT`
+- Real **Gemini 3.1 Flash Lite** runs multimodal analysis on uploaded body + garment images
+- `narrative_composer` and `/stilist` also hit Gemini
+- Real cohort lookups run against the enriched 200-row review corpus
+- The test suite still runs deterministically because tests inject mock clients directly (no env flip needed)
+
+When `DEMO_MODE=true` (opt-in offline mode):
 - `MockAIClient` returns deterministic body + garment + stylist analysis (no Gemini API call)
 - Review Intelligence uses a seeded **in-memory** ChromaDB stub — no external ChromaDB needed
 - Pipeline completes in ~1 second with realistic Turkish output
-- The 218-test suite uses this mode by default
-
-When `DEMO_MODE=false`:
-- `GEMINI_API_KEY` required
-- ChromaDB must be running at `CHROMA_HOST:CHROMA_PORT`
-- Real Gemini 3.1 Flash Lite runs multimodal analysis on uploaded images
-- Real cohort lookups run against the enriched 200-row review corpus
 
 ---
 
@@ -258,15 +262,19 @@ All user-facing output fields are Turkish.
 
 ### Where Gemini actually runs
 
+Live Gemini is the default path (`DEMO_MODE=false`). The table below lists every Gemini call site in that default configuration.
+
 | Node / endpoint | Gemini call | Notes |
 |---|---|---|
-| `analyzer.analyze_body` | vision + Turkish JSON | always (live mode) |
-| `analyzer.analyze_garment` | vision + Turkish JSON + is_garment gate | always (live mode) |
+| `analyzer.analyze_body` | vision + Turkish JSON | always |
+| `analyzer.analyze_garment` | vision + Turkish JSON + is_garment gate | always |
 | `review_retriever` | `text-embedding-004` | only when `EMBEDDING_MODEL` is set |
-| `narrative_composer` | Gemini text | always (live mode) — writes "Detaylı Analiz" card |
-| `/stilist` | `stylist_pick` — picks 3 from catalog | always (live mode) |
+| `narrative_composer` | Gemini text | always — writes "Detaylı Analiz" card |
+| `/stilist` | `stylist_pick` — picks 3 from catalog | always |
 | `/qa` | optional polish via `compose_qa_narrative` | only when `ENABLE_GEMINI_NARRATIVE=true` (default OFF) |
 | `/analyses/{id}/cohort` | none | pure Python aggregation over enriched JSONL |
+
+> All of the above are skipped only when `DEMO_MODE=true` is explicitly set — the pipeline then swaps in `MockAIClient` for offline/repro runs.
 
 ---
 
